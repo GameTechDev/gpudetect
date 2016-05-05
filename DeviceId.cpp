@@ -96,6 +96,10 @@ bool getGraphicsDeviceInfo( unsigned int* VendorId,
 		intelAdapterIndex++;
 	}
 
+	if (pAdapter == NULL) {
+		FreeLibrary(hDXGI);
+		return false;
+	}
 	*VendorId = AdapterDesc.VendorId;
 	*DeviceId = AdapterDesc.DeviceId;
 	*GFXBrand = AdapterDesc.Description;
