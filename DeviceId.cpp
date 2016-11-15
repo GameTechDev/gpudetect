@@ -113,7 +113,7 @@ bool getGraphicsDeviceInfo( unsigned int* VendorId,
 	if (pAdapter3) {
 		DXGI_QUERY_VIDEO_MEMORY_INFO memInfo;
 		pAdapter3->QueryVideoMemoryInfo(intelAdapterIndex, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memInfo);
-		*VideoMemory = memInfo.AvailableForReservation;
+		*VideoMemory = memInfo.Budget;
 		pAdapter3->Release();
 	}
 	else {
