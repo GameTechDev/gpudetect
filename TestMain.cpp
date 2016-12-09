@@ -43,7 +43,8 @@ const char *PRODUCT_FAMILY_STRING[] =
 	"ValleyView",
 	"Broadwell",
 	"Cherryview",
-	"Skylake"
+	"Skylake",
+	"Kabylake"
 };
 const unsigned int NUM_PRODUCT_FAMILIES = sizeof(PRODUCT_FAMILY_STRING) / sizeof(PRODUCT_FAMILY_STRING[0]);
 

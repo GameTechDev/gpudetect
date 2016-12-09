@@ -215,6 +215,11 @@ long getIntelDeviceInfo( unsigned int VendorId, IntelDeviceInfoHeader *pIntelDev
 
 		if( SUCCEEDED( hr = pDevice->CheckCounter( &counterDescription, &counterType, &uiSlotsRequired, NULL, &uiNameLength, NULL, &uiUnitsLength, NULL, &uiDescLength ) ) )
 		{
+			if (uiNameLength == 0 || uiUnitsLength == 0 || uiDescLength == 0)
+			{
+				return GGF_ERROR;
+			}
+
 			LPSTR sName  = new char[uiNameLength];
 			LPSTR sUnits = new char[uiUnitsLength];
 			LPSTR sDesc  = new char[uiDescLength];
@@ -398,6 +403,10 @@ PRODUCT_FAMILY getGTGeneration(unsigned int deviceId)
 
 	if (maskedDeviceId == 0x1900) {
 		return IGFX_SKYLAKE;
+	}
+	
+	if (maskedDeviceId == 0x5900) {
+		return IGFX_KABYLAKE;
 	}
 
 	return IGFX_UNKNOWN;
