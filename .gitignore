@@ -1,3 +1,14 @@
 *.sdf
-*.vcxproj
 *.opendb
+*.tlog
+*.log
+*.obj
+*.idb
+*.db
+*.pdb
+*ilk
+*.exe
+*.log
+v14/
+Debug/
+Release/
