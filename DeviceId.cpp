@@ -419,6 +419,10 @@ PRODUCT_FAMILY getGTGeneration(unsigned int deviceId)
 		return IGFX_KABYLAKE;
 	}
 
+	if (maskedDeviceId == 0x3E00) {
+		return IGFX_COFFEELAKE;
+	}
+	
 	return IGFX_UNKNOWN;
 }
 
