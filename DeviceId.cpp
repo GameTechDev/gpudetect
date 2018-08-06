@@ -29,6 +29,7 @@
 #include <D3DCommon.h>
 #ifdef _WIN32_WINNT_WIN10 
 #include <DXGI1_4.h>
+#include <d3d11_3.h>
 #else
 #include <DXGI1_3.h>
 #endif
@@ -111,24 +112,52 @@ bool getGraphicsDeviceInfo( unsigned int* VendorId,
 	*GFXBrand = AdapterDesc.Description;
 
 	//
-	// If we are on Windows 10 then the Adapter3 interface should be available. This is recommended over using
-	// the AdapterDesc for getting the amount of memory available.
+	// On UMA hardware like Intel iGPUs, all graphics memory is shared. The dedicated
+	// value is populated by a default 128 dummy value in Intel drivers to prevent crashes in 
+	// legacy apps which aren't aware of UMA hardware (other vendors may use a different threshold). 
 	//
-#ifdef _WIN32_WINNT_WIN10
-	IDXGIAdapter3* pAdapter3;
-	pAdapter->QueryInterface(IID_IDXGIAdapter3, (void**)&pAdapter3);
-	if (pAdapter3) {
-		DXGI_QUERY_VIDEO_MEMORY_INFO memInfo;
-		pAdapter3->QueryVideoMemoryInfo(intelAdapterIndex, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memInfo);
-		*VideoMemory = memInfo.Budget;
-		pAdapter3->Release();
-	}
-	else 
-#endif // DEBUG
-	{
-		*VideoMemory = (unsigned __int64)(AdapterDesc.DedicatedVideoMemory + AdapterDesc.SharedSystemMemory);
-	}
+	// If we are using DX11.3 the FeatureDataOptions2 interface should be available. Checking the UMA flag 
+	// is recommended over comparing dedicated against a UMA threshold users can regedit override.
+	//
+	HRESULT hr = E_FAIL;
+	*VideoMemory = 0;
 
+#ifdef _WIN32_WINNT_WIN10
+	Microsoft::WRL::ComPtr<ID3D11Device> pDevice = NULL;
+	Microsoft::WRL::ComPtr<ID3D11DeviceContext> pImmediateContext = NULL;
+	D3D_FEATURE_LEVEL featureLevel;
+	ZeroMemory(&featureLevel, sizeof(D3D_FEATURE_LEVEL));
+			
+	if (SUCCEEDED(D3D11CreateDevice(pAdapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, NULL, NULL, NULL,
+		D3D11_SDK_VERSION, &pDevice, &featureLevel, &pImmediateContext))) {
+
+		D3D11_FEATURE_DATA_D3D11_OPTIONS2 FeatureData;
+		ZeroMemory(&FeatureData, sizeof(FeatureData));
+		Microsoft::WRL::ComPtr<ID3D11Device3> pDevice3;
+
+		//
+		// Set the maximum available video memory
+		//
+		if (SUCCEEDED(pDevice->QueryInterface(__uuidof(ID3D11Device3), (void**)&pDevice3))) {
+			if (SUCCEEDED(pDevice3->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS2, &FeatureData, sizeof(FeatureData)))) {
+				*VideoMemory = (unsigned __int64)((FeatureData.UnifiedMemoryArchitecture == FALSE) ?
+					AdapterDesc.DedicatedVideoMemory : AdapterDesc.SharedSystemMemory);
+			}
+		}
+	}
+#endif // _WIN32_WINNT_WIN10
+
+	if (hr == E_FAIL || *VideoMemory <= 0) // Pre-DX11.3 fallback
+	{
+		//
+		// We check whether dedicated is greater than a threshold to determine if we're on a UMA GPU.
+		// NOTE: This isn't 100% foolproof. Users can override this value to anywhere from 0 and 512MB 
+		// with the reg key: HKEY_LOCAL_MACHINE\Software\Intel\GMM\DedicatedSegmentSize
+		//
+		const int ASSUME_UMA_THRESHOLD = 512 * (1024 * 1024);
+		*VideoMemory = (unsigned __int64)((AdapterDesc.DedicatedVideoMemory >= ASSUME_UMA_THRESHOLD) ?
+			AdapterDesc.DedicatedVideoMemory : AdapterDesc.SharedSystemMemory);
+	}
 
 	pAdapter->Release();
 	FreeLibrary(hDXGI);
