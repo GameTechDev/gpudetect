@@ -50,7 +50,7 @@ PresetLevel getDefaultFidelityPresets(unsigned int VendorId, unsigned int Device
 *     capabilities here and makes whatever decisions it needs to based on the results.
 *
 *****************************************************************************************/
-int main( int argc, char* argv[] )
+int main()
 {
 	//
 	// First we need to check if it is an Intel processor. If not then an alternate
@@ -279,23 +279,21 @@ PresetLevel getDefaultFidelityPresets(unsigned int VendorId, unsigned int Device
 	//
 
 	FILE *fp = NULL;
-	const char *cfgFileName;
+	const char *cfgFileName = nullptr;
 
 	switch (VendorId)
 	{
 	case 0x8086:
 		cfgFileName = "IntelGfx.cfg";
 		break;
-		//case 0x1002:
-		//    cfgFileName =  "ATI.cfg"; // not provided
-		//    break;
 
-		//case 0x10DE:
-		//    cfgFileName = "Nvidia.cfg"; // not provided
-		//    break;
+	//case 0x1002:
+	//    cfgFileName =  "ATI.cfg"; // not provided
+	//    break;
 
-	default:
-		break;
+	//case 0x10DE:
+	//    cfgFileName = "Nvidia.cfg"; // not provided
+	//    break;
 	}
 
 	fopen_s(&fp, cfgFileName, "r");
@@ -346,7 +344,7 @@ PresetLevel getDefaultFidelityPresets(unsigned int VendorId, unsigned int Device
 			if ((vId == VendorId) && (dId == DeviceId))
 			{
 				char s[10];
-				sscanf_s(szPresetLevel, "%s", s, _countof(s));
+				sscanf_s(szPresetLevel, "%s", s, (unsigned int) _countof(s));
 
 				if (!_stricmp(s, "Low"))
 					presets = Low;

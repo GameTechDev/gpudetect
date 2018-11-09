@@ -83,7 +83,7 @@ bool getGraphicsDeviceInfo( unsigned int* VendorId,
 	//
 	IDXGIAdapter*     pAdapter;
 	IDXGIFactory*     pFactory;
-	DXGI_ADAPTER_DESC AdapterDesc;
+    DXGI_ADAPTER_DESC AdapterDesc = {};
 	if (FAILED((*pCreateDXGIFactory)(__uuidof(IDXGIFactory), (void**)(&pFactory)))) {
 		FreeLibrary(hDXGI);
 		return false;
@@ -238,7 +238,6 @@ long getIntelDeviceInfo( unsigned int VendorId, IntelDeviceInfoHeader *pIntelDev
 	//
 	D3D11_COUNTER_DESC pIntelCounterDesc;
 	UINT uiSlotsRequired, uiNameLength, uiUnitsLength, uiDescLength;
-	LPSTR sName, sUnits, sDesc;
 
 	ZeroMemory(&pIntelCounterDesc, sizeof(D3D11_COUNTER_DESC));
 	
@@ -250,7 +249,6 @@ long getIntelDeviceInfo( unsigned int VendorId, IntelDeviceInfoHeader *pIntelDev
 		counterDescription.Counter = static_cast<D3D11_COUNTER>(i + D3D11_COUNTER_DEVICE_DEPENDENT_0);
 		counterDescription.MiscFlags = 0;
 		uiSlotsRequired = uiNameLength = uiUnitsLength = uiDescLength = 0;
-		sName = sUnits = sDesc = NULL;
 
 		if( SUCCEEDED( hr = pDevice->CheckCounter( &counterDescription, &counterType, &uiSlotsRequired, NULL, &uiNameLength, NULL, &uiUnitsLength, NULL, &uiDescLength ) ) )
 		{
@@ -466,8 +464,6 @@ UINT checkDxExtensionVersion( )
 	HRESULT hr = NULL;
 
 	ZeroMemory( &featureLevel, sizeof(D3D_FEATURE_LEVEL) );
-
-	ID3D11DeviceContext **pContext = &pImmediateContext;
 
 	// First create the Device
 	hr = D3D11CreateDevice( NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, NULL, NULL, NULL,
