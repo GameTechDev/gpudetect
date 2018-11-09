@@ -1,17 +1,17 @@
 /////////////////////////////////////////////////////////////////////////////////////////////
-// Copyright 2017 Intel Corporation
+// Copyright 2017-2018 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
-// limitations under the License.
+// limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 //
@@ -19,124 +19,84 @@
 //
 #pragma once
 
-#include <windows.h>
+#include <dxgi.h>
 #include <string>
 
-#define INTEL_VENDOR_ID 0x8086
+enum {
+    INTEL_VENDOR_ID = 0x8086,
+};
 
-typedef enum
-{ 
-    IGFX_UNKNOWN     = 0x0, 
-    IGFX_SANDYBRIDGE = 0xC, 
-    IGFX_IVYBRIDGE,    
+enum INTEL_GPU_ARCHITECTURE {
+    IGFX_UNKNOWN = 0,
+    IGFX_SANDYBRIDGE = 0xC,
+    IGFX_IVYBRIDGE,
     IGFX_HASWELL,
-	IGFX_VALLEYVIEW,
-	IGFX_BROADWELL,
-	IGFX_SKYLAKE,
-	IGFX_KABYLAKE,
-	IGFX_COFFEELAKE
-} PRODUCT_FAMILY;
+    IGFX_VALLEYVIEW,
+    IGFX_BROADWELL,
+    IGFX_CHERRYVIEW,
+    IGFX_SKYLAKE,
+    IGFX_KABYLAKE,
+    IGFX_COFFEELAKE
+};
 
-//
-// Device dependent counter and associated data structures
-//
-#define INTEL_DEVICE_INFO_COUNTERS         "Intel Device Information"
-
-struct IntelDeviceInfoV1
-{
+struct IntelDeviceInfo {
     DWORD GPUMaxFreq;
     DWORD GPUMinFreq;
+    DWORD GPUArchitecture;   // INTEL_GPU_ARCHITECTURE
+    DWORD EUCount;
+    DWORD PackageTDP;
+    DWORD MaxFillRate;
 };
 
-struct IntelDeviceInfoV2
-{
-	DWORD GPUMaxFreq;
-	DWORD GPUMinFreq;
-	DWORD GTGeneration;
-	DWORD EUCount;
-	DWORD PackageTDP;
-	DWORD MaxFillRate;
-};
-
-struct IntelDeviceInfoHeader
-{
-	DWORD Size;
-	DWORD Version;
-};
-
-/*****************************************************************************************
+/*******************************************************************************
  * getGraphicsDeviceInfo
  *
- *     Function to get the primary graphics device's Vendor ID and Device ID, either 
- *     through the new DXGI interface or through the older D3D9 interfaces.
- *     The function also returns the amount of memory availble for graphics using 
- *     the value shared + dedicated video memory returned from DXGI, or, if the DXGI
- *	   interface is not available, the amount of memory returned from WMI.
+ *     Query the specified adapter's Vendor ID, Device ID, the amount of memory
+ *     availble for graphics (VideoMemory), and the GPU's Description.
  *
- *****************************************************************************************/
+ ******************************************************************************/
+bool getGraphicsDeviceInfo(IDXGIAdapter* pAdapter, unsigned int* VendorId, unsigned int* DeviceId, unsigned __int64* VideoMemory, std::wstring* Description);
 
-bool getGraphicsDeviceInfo( unsigned int* VendorId,
-                          unsigned int* DeviceId,
-						  unsigned __int64* VideoMemory,
-						  std::wstring* GFXBrand);
-
-/*****************************************************************************************
+/*******************************************************************************
  * getIntelDeviceInfo
  *
- *     Returns the device info:
- *       GPU Max Frequency (Mhz)
- *       GPU Min Frequency (Mhz)
- *       GT Generation (enum)
- *       EU Count (unsigned int)
- *       Package TDP (Watts)
- *       Max Fill Rate (Pixel/Clk)
- * 
- * A return value of GGF_SUCCESS indicates 
- *	   the frequency was returned correctly. 
- *     This function is only valid on Intel graphics devices SNB and later.
- *****************************************************************************************/
-
-long getIntelDeviceInfo( unsigned int VendorId, IntelDeviceInfoHeader *pIntelDeviceInfoHeader, void *pIntelDeviceInfoBuffer );
+ *     Query the specified adapter for IntelDeviceInfo.  Some GPUs and drivers
+ *     may only return GPUMaxFreq and GPUMinFreq (with all other entries left
+ *     zero).
+ *
+ ******************************************************************************/
+bool getIntelDeviceInfo(IDXGIAdapter* pAdapter, IntelDeviceInfo* pIntelDeviceInfo);
 
 
-/*****************************************************************************************
+/*******************************************************************************
  * checkDxExtensionVersion
  *
- *      Returns the EXTENSION_INTERFACE_VERSION supported by the driver
- *      EXTENSION_INTERFACE_VERSION_1_0 supports extensions for pixel synchronization and
- *      instant access of graphics memory
+ *      Returns the Intel DirectX Extension version supported by the specified
+ *      adapter. 0 indicates that no Intel DirectX Extensions are supported.
+ *      EXTENSION_INTERFACE_VERSION_1_0 supports extensions for pixel
+ *      synchronization and instant access of graphics memory.
  *
- *****************************************************************************************/
-unsigned int checkDxExtensionVersion();
+ ******************************************************************************/
+unsigned int checkDxExtensionVersion(IDXGIAdapter* pAdapter);
 
+/*******************************************************************************
+ * getIntelGPUArchitecture
+ *
+ *      Returns the architecture of an Intel GPU by parsing the device id.  It
+ *      assumes that it is indeed an Intel GPU device ID (i.e., that VendorID
+ *      was INTEL_VENDOR_ID).
+ *
+ *      You cannot generally compare device IDs to compare architectures; for
+ *      example, a newer architecture may have an lower deviceID.
+ *
+ ******************************************************************************/
+INTEL_GPU_ARCHITECTURE getIntelGPUArchitecture(unsigned int deviceId);
 
-/*****************************************************************************************
-* getCPUInfo
-*
-*      Parses CPUID output to find the brand and vendor strings.
-*
-*****************************************************************************************/
+/*******************************************************************************
+ * getCPUInfo
+ *
+ *      Parses CPUID output to find the brand and vendor strings.
+ *
+ ******************************************************************************/
 void getCPUInfo(std::string* cpubrand, std::string* cpuvendor);
 
-
-/*****************************************************************************************
-* getGTGeneration
-*
-*      Returns the generation by parsing the device id. The first two digits of the hex
-*      number generally denote the generation. Sandybridge and Ivybridge share the same
-*      numbers so they must be further parsed.
-*
-*      Comparison of the deviceIds (for example to see if a device is more recent than
-*      another) does not always work.
-*
-*****************************************************************************************/
-PRODUCT_FAMILY getGTGeneration(unsigned int deviceId);
-
-
-
-
-#define GGF_SUCCESS 0
-#define GGF_ERROR					-1
-#define GGF_E_UNSUPPORTED_HARDWARE	-2
-#define GGF_E_UNSUPPORTED_DRIVER	-3
-#define GGF_E_D3D_ERROR				-4

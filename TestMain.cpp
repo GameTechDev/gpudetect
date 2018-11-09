@@ -1,382 +1,396 @@
-/////////////////////////////////////////////////////////////////////////////////////////////
-// Copyright 2017 Intel Corporation
+////////////////////////////////////////////////////////////////////////////////
+// Copyright 2017-2018 Intel Corporation
 //
-// Licensed under the Apache License, Version 2.0 (the "License");// you may not use this file except in compliance with the License.// You may obtain a copy of the License at//// http://www.apache.org/licenses/LICENSE-2.0//// Unless required by applicable law or agreed to in writing, software// distributed under the License is distributed on an "AS IS" BASIS,// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.// See the License for the specific language governing permissions and// limitations under the License.
-/////////////////////////////////////////////////////////////////////////////////////////////
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+////////////////////////////////////////////////////////////////////////////////
 
 #include <conio.h>
+#include <d3d11.h>
+#include <intrin.h>
 #include <stdio.h>
-#include "DeviceId.h"
 #include <string>
 
-#include "D3D11.h"
+#include "DeviceId.h"
 #include "ID3D10Extensions.h"
-#include <intrin.h>
 
+namespace {
 
 // Define settings to reflect Fidelity abstraction levels you need
-typedef enum
-{
-	NotCompatible,  // Found GPU is not compatible with the app
-	Low,
-	Medium,
-	MediumPlus,
-	High,
-	Undefined  // No predefined setting found in cfg file. 
-			   // Use a default level for unknown video cards.
-}
-PresetLevel;
-
-const char *PRODUCT_FAMILY_STRING[] =
-{
-	"Sandy Bridge",
-	"Ivy Bridge",
-	"Haswell",
-	"ValleyView",
-	"Broadwell",
-	"Cherryview",
-	"Skylake",
-	"Kabylake",
-	"Coffeelake"
+enum PresetLevel {
+    NotCompatible,  // Found GPU is not compatible with the app
+    Low,
+    Medium,
+    MediumPlus,
+    High,
+    Undefined  // No predefined setting found in cfg file. 
+               // Use a default level for unknown video cards.
 };
-const unsigned int NUM_PRODUCT_FAMILIES = sizeof(PRODUCT_FAMILY_STRING) / sizeof(PRODUCT_FAMILY_STRING[0]);
 
-PresetLevel getDefaultFidelityPresets(unsigned int VendorId, unsigned int DeviceId);
-
-/*****************************************************************************************
-* main
-*
-*     Function represents the game or application. The application checks for graphics
-*     capabilities here and makes whatever decisions it needs to based on the results.
-*
-*****************************************************************************************/
-int main()
+char const* getIntelGPUArchitectureString(INTEL_GPU_ARCHITECTURE arch)
 {
-	//
-	// First we need to check if it is an Intel processor. If not then an alternate
-	// path should be taken. This is also a good place to check for other CPU capabilites
-	// such as AVX support.
-	//
-	std::string CPUBrand;
-	std::string CPUVendor;
+    switch (arch) {
+    case IGFX_SANDYBRIDGE: return "Sandy Bridge";
+    case IGFX_IVYBRIDGE:   return "Ivy Bridge";
+    case IGFX_HASWELL:     return "Haswell";
+    case IGFX_VALLEYVIEW:  return "ValleyView";
+    case IGFX_BROADWELL:   return "Broadwell";
+    case IGFX_CHERRYVIEW:  return "Cherryview";
+    case IGFX_SKYLAKE:     return "Skylake";
+    case IGFX_KABYLAKE:    return "Kabylake";
+    case IGFX_COFFEELAKE:  return "Coffeelake";
+    }
 
-	getCPUInfo(&CPUBrand, &CPUVendor);
-	if (CPUVendor != "GenuineIntel") {
-		printf("Not an Intel CPU");
-		_getch();
-		return 0;
-	}
+    return "Unknown";
+}
 
-	//
-	// The brand string can be parsed to discover some information about the type of
-	// processor.
-	//
-	printf( "CPU Brand: %s\n", CPUBrand.c_str() );
+bool isnumber(char* s)
+{
+    for (; *s != '\0'; ++s) {
+        if (!isdigit(*s)) {
+            return false;
+        }
+    }
+    return true;
+}
 
-	std::size_t found = CPUBrand.find("i7");
-	if (found != std::string::npos)
-	{
-		printf( "i7 Brand Found\n" );
-	}
+IDXGIAdapter* getAdapter(int AdapterIndex)
+{
+    //
+    // We are relying on DXGI (supported on Windows Vista and later) to query
+    // the adapter, so fail if it is not available.
+    //
+    // DXGIFactory1 is required by Windows Store Apps so try that first.
+    //
+    HMODULE hDXGI = LoadLibrary(L"dxgi.dll");
+    if (hDXGI == NULL) {
+        return nullptr;
+    }
 
-	found = CPUBrand.find("i5");
-	if (found != std::string::npos)
-	{
-		printf( "i5 Brand Found\n" );
-	}
+    typedef HRESULT(WINAPI*LPCREATEDXGIFACTORY)(REFIID riid, void** ppFactory);
 
-	found = CPUBrand.find("i3");
-	if (found != std::string::npos)
-	{
-		printf( "i3 Brand Found\n" );
-	}
+    LPCREATEDXGIFACTORY pCreateDXGIFactory = (LPCREATEDXGIFACTORY)GetProcAddress(hDXGI, "CreateDXGIFactory1");
+    if (pCreateDXGIFactory == NULL) {
+        pCreateDXGIFactory = (LPCREATEDXGIFACTORY)GetProcAddress(hDXGI, "CreateDXGIFactory");
 
-	found = CPUBrand.find("Celeron");
-	if (found != std::string::npos)
-	{
-		printf( "Celeron Brand Found\n" );
-	}
+        if (pCreateDXGIFactory == NULL) {
+            FreeLibrary(hDXGI);
+            return nullptr;
+        }
+    }
 
-	found = CPUBrand.find("Pentium");
-	if (found != std::string::npos)
-	{
-		printf( "Pentium Brand Found\n" );
-	}
+    //
+    // We have the CreateDXGIFactory function so use it to actually create the factory and enumerate
+    // through the adapters. Here, we are specifically looking for the Intel gfx adapter.
+    //
+    IDXGIFactory* pFactory = NULL;
+    if (FAILED((*pCreateDXGIFactory)(__uuidof(IDXGIFactory), (void**)(&pFactory)))) {
+        FreeLibrary(hDXGI);
+        return nullptr;
+    }
 
-	//
-	// Some information about the gfx adapters is exposed through Windows and DXGI. If
-	// the machine has multiple gfx adapters or no Intel gfx this is where that can be
-	// detected.
-	//
-	unsigned int VendorId, DeviceId;
-	unsigned __int64 VideoMemory;
-	std::wstring GFXBrand;
+    IDXGIAdapter* pAdapter = NULL;
+    if (FAILED(pFactory->EnumAdapters(AdapterIndex, (IDXGIAdapter**)&pAdapter))) {
+        pFactory->Release();
+        FreeLibrary(hDXGI);
+        return nullptr;
+    }
 
-	if (false == getGraphicsDeviceInfo(&VendorId, &DeviceId, &VideoMemory, &GFXBrand))
-	{
-		printf("Intel Graphics Adapter not detected\n");
-		return -1;
-	}
+    pFactory->Release();
+    FreeLibrary(hDXGI);
+    return pAdapter;
+}
 
-	printf("Primary Graphics Device\n");
-	printf("-----------------------\n");
-	printf("Vendor( 0x%x ) : Device ( 0x%x )\n", VendorId, DeviceId);
-	printf("Video Memory: %I64u MB\n", VideoMemory / (1024 * 1024));
-	printf("Graphics Brand: %S\n", GFXBrand.c_str());
+/*******************************************************************************
+ * getDefaultFidelityPresets
+ *
+ *     Function to find the default fidelity preset level, based on the type of
+ *     graphics adapter present.
+ *
+ *     The guidelines for graphics preset levels for Intel devices is a generic
+ *     one based on our observations with various contemporary games. You would
+ *     have to change it if your game already plays well on the older hardware
+ *     even at high settings.
+ *
+ ******************************************************************************/
+PresetLevel getDefaultFidelityPresets(unsigned int GPUVendorId, unsigned int GPUDeviceId)
+{
+    PresetLevel presets = Undefined;
 
-	//
-	// Similar to the CPU brand, we can also parse the GPU brand string for information like whether
-	// is an Iris or Iris Pro part.
-	//
-	std::string TempGPUBrand;
-	char* ConvertArray = new char[(int)GFXBrand.size()];
-	WideCharToMultiByte(CP_UTF8, 0, &GFXBrand[0], (int)GFXBrand.size(), &ConvertArray[0], (int)GFXBrand.size(), NULL, NULL);
-	TempGPUBrand = ConvertArray;
-	found = TempGPUBrand.find("Iris");
-	if (found != std::string::npos)
-	{
-		found = TempGPUBrand.find("Pro");
-		if (found != std::string::npos)
-		{
-			printf("Iris Pro Graphics Brand Found\n");
-		}
-		else
-		{
-			printf("Iris Graphics Brand Found\n");
-		}
-	}
-	delete[] ConvertArray;
+    //
+    // Look for a config file that qualifies devices from any vendor
+    // The code here looks for a file with one line per recognized graphics
+    // device in the following format:
+    //
+    // VendorIDHex, DeviceIDHex, CapabilityEnum      ;Commented name of card
+    //
 
-	//
-	// The deviceID can be used as an index into the configuration file to load other information.
-	//
-	PresetLevel defPresets;
-	defPresets = getDefaultFidelityPresets(VendorId, DeviceId);
+    FILE *fp = NULL;
+    const char *cfgFileName = nullptr;
 
-	if (defPresets == NotCompatible) {
-		printf("Default Presets = NotCompatible\n");
-	}
-	else if (defPresets == Low) {
-		printf("Default Presets = Low\n");
-	}
-	else if (defPresets == Medium) {
-		printf("Default Presets = Medium\n");
-	}
-	else if (defPresets == MediumPlus) {
-		printf("Default Presets = Medium+\n");
-	}
-    printf("\n");
+    switch (GPUVendorId)
+    {
+    case 0x8086:
+        cfgFileName = "IntelGfx.cfg";
+        break;
 
-	//
-    // Check for DX extensions
-	//
-    unsigned int extensionVersion = checkDxExtensionVersion();
-	if (extensionVersion >= ID3D10::EXTENSION_INTERFACE_VERSION_1_0) {
-		printf("Supports Intel Iris Graphics extensions: \n\tpixel sychronization \n\tinstant access of graphics memory\n\n");
-	}
-	else {
-		printf("Does not support Intel Iris Graphics extensions\n\n");
-	}
+    //case 0x1002:
+    //    cfgFileName =  "ATI.cfg"; // not provided
+    //    break;
 
-	//
-	// In DirectX, Intel exposes additional information through the driver that can be obtained
-	// querying a special DX counter
-	//
-	IntelDeviceInfoHeader intelDeviceInfoHeader = { 0 };
-	unsigned char intelDeviceInfoBuffer[1024];
+    //case 0x10DE:
+    //    cfgFileName = "Nvidia.cfg"; // not provided
+    //    break;
 
-	long getStatus = getIntelDeviceInfo( VendorId, &intelDeviceInfoHeader, &intelDeviceInfoBuffer );
+    default:
+        return presets;
+    }
 
-	if ( getStatus == GGF_SUCCESS )
-	{
-		printf("Intel Device Info Version  %d (%d bytes)\n", intelDeviceInfoHeader.Version, intelDeviceInfoHeader.Size );
+    fopen_s(&fp, cfgFileName, "r");
 
-		if ( intelDeviceInfoHeader.Version == 2 )
-		{
-			IntelDeviceInfoV2 intelDeviceInfo;
 
-			memcpy( &intelDeviceInfo, intelDeviceInfoBuffer, intelDeviceInfoHeader.Size );
+    if (fp)
+    {
+        char line[100];
+        char* context = NULL;
 
-			int myGeneration = intelDeviceInfo.GTGeneration;
-			int generationIndex = myGeneration - IGFX_SANDYBRIDGE;
-			const char *myGenerationString;
+        char* szVendorId = NULL;
+        char* szDeviceId = NULL;
+        char* szPresetLevel = NULL;
 
-			if (myGeneration < IGFX_SANDYBRIDGE) {
-				myGenerationString = "Old unrecognized generation";
-			}
-			else if (myGeneration > (NUM_PRODUCT_FAMILIES + IGFX_SANDYBRIDGE)) {
-				myGenerationString = "New unrecognized generation";
-			}
-			else {
-				myGenerationString = PRODUCT_FAMILY_STRING[generationIndex];
-			}
+        //
+        // read one line at a time till EOF
+        //
+        while (fgets(line, 100, fp))
+        {
+            //
+            // Parse and remove the comment part of any line
+            //
+            int i; for (i = 0; line[i] && line[i] != ';'; i++); line[i] = '\0';
 
-			printf("GT Generation:             %s (0x%x)\n", myGenerationString, intelDeviceInfo.GTGeneration );
-			printf("GPU Max Frequency:         %d mhz\n", intelDeviceInfo.GPUMaxFreq );
-			printf("GPU Min Frequency:         %d mhz\n", intelDeviceInfo.GPUMinFreq );
-			printf("EU Count:                  %d\n", intelDeviceInfo.EUCount );
-			printf("Package TDP:               %d watts\n", intelDeviceInfo.PackageTDP );
-			printf("Max Fill Rate:             %d pixel/clk\n", intelDeviceInfo.MaxFillRate );
-		}
-		else if (intelDeviceInfoHeader.Version == 1)
-		{
-			IntelDeviceInfoV1 intelDeviceInfo;
+            //
+            // Try to extract GPUVendorId, GPUDeviceId and recommended Default Preset Level
+            //
+            szVendorId = strtok_s(line, ",\n", &context);
+            szDeviceId = strtok_s(NULL, ",\n", &context);
+            szPresetLevel = strtok_s(NULL, ",\n", &context);
 
-			memcpy( &intelDeviceInfo, intelDeviceInfoBuffer, intelDeviceInfoHeader.Size );
+            if ((szVendorId == NULL) ||
+                (szDeviceId == NULL) ||
+                (szPresetLevel == NULL))
+            {
+                continue;  // blank or improper line in cfg file - skip to next line
+            }
 
-			printf("GPU Max Frequency:         %d mhz\n", intelDeviceInfo.GPUMaxFreq );
-			printf("GPU Min Frequency:         %d mhz\n", intelDeviceInfo.GPUMinFreq );
-		}
-		else
-		{
-			printf("Unrecognized Intel Device Header version\n");
-		}
-	}
-	else if ( getStatus == GGF_E_UNSUPPORTED_HARDWARE )
-	{
-		printf("GPU min/max turbo frequency: unknown\n");
-		printf("GPU does not support frequency query\n");
-	}
-	else if( getStatus == GGF_E_UNSUPPORTED_DRIVER )
-	{
-		printf("Intel device information: unknown\n");
-		printf("Driver does not support device information query\n");
-	}
-	else
-	{
-		printf("Intel device information: unknown\n");
-		printf("Error retrieving frequency information\n");
+            unsigned int vId, dId;
+            sscanf_s(szVendorId, "%x", &vId);
+            sscanf_s(szDeviceId, "%x", &dId);
+
+            //
+            // If current graphics device is found in the cfg file, use the 
+            // pre-configured default Graphics Presets setting.
+            //
+            if ((vId == GPUVendorId) && (dId == GPUDeviceId))
+            {
+                char s[10];
+                sscanf_s(szPresetLevel, "%s", s, (unsigned int) _countof(s));
+
+                if (!_stricmp(s, "Low"))
+                    presets = Low;
+                else if (!_stricmp(s, "Medium"))
+                    presets = Medium;
+                else if (!_stricmp(s, "Medium+"))
+                    presets = MediumPlus;
+                else if (!_stricmp(s, "High"))
+                    presets = High;
+                else
+                    presets = NotCompatible;
+
+                break;
+            }
+        }
+
+        fclose(fp);  // Close open file handle
+    }
+    else
+    {
+        printf("%s not found! Presets undefined.\n", cfgFileName);
+    }
+
+    //
+    // If the current graphics device was not listed in any of the config
+    // files, or if config file not found, use Low settings as default.
+    // This should be changed to reflect the desired behavior for unknown
+    // graphics devices.
+    //
+    if (presets == Undefined) {
+        presets = Low;
+    }
+
+    return presets;
+}
+
+}
+
+/*******************************************************************************
+ * main
+ *
+ *     Function represents the game or application. The application checks for
+ *     graphics capabilities here and makes whatever decisions it needs to
+ *     based on the results.
+ *
+ ******************************************************************************/
+int main(int argc, char** argv)
+{
+    int adapterIndex = 0;
+    if (argc == 2 && isnumber(argv[1])) {
+        adapterIndex = atoi(argv[1]);
+    } else if (argc != 1) {
+        fprintf(stderr, "error: unexpected arguments.\n");
+        fprintf(stderr, "usage: GPUDetect adapter_index\n");
+        return 1;
+    }
+
+    //
+    // First check if the CPU is an Intel processor.  This is also a good place
+    // to check for other CPU capabilites such as AVX support.
+    //
+    // The brand string can be parsed to discover some information about the
+    // type of processor.
+    //
+    std::string CPUBrand;
+    std::string CPUVendor;
+    getCPUInfo(&CPUBrand, &CPUVendor);
+    printf("CPU Vendor: %s\n", CPUVendor.c_str());
+    printf("CPU Brand: %s\n", CPUBrand.c_str());
+
+    if (CPUVendor == "GenuineIntel") {
+        if (CPUBrand.find("i9") != std::string::npos) {
+            printf("           i9 Brand Found\n");
+        } else if (CPUBrand.find("i7") != std::string::npos) {
+            printf("           i7 Brand Found\n");
+        } else if (CPUBrand.find("i5") != std::string::npos) {
+            printf("           i5 Brand Found\n");
+        } else if (CPUBrand.find("i3") != std::string::npos) {
+            printf("           i3 Brand Found\n");
+        } else if (CPUBrand.find("Celeron") != std::string::npos) {
+            printf("           Celeron Brand Found\n");
+        } else if (CPUBrand.find("Pentium") != std::string::npos) {
+            printf("           Pentium Brand Found\n");
+        }
+    }
+
+    //
+    // Information about the GPUs is exposed through Windows as indexed
+    // adapters.  Index 0 is the primary or default GPU.  Information about
+    // other GPUs can be queried by using a different index.
+    //
+    IDXGIAdapter* pAdapter = getAdapter(adapterIndex);
+    if (pAdapter == NULL) {
+        fprintf(stderr, "error: could not create adapter #%u\n", adapterIndex);
+        return 2;
+    }
+
+    unsigned int GPUVendorId;
+    unsigned int GPUDeviceId;
+    unsigned __int64 VideoMemory;
+    std::wstring GPUDescription;
+    if (!getGraphicsDeviceInfo(pAdapter, &GPUVendorId, &GPUDeviceId, &VideoMemory, &GPUDescription)) {
+        fprintf(stderr, "error: failed to get GPU info\n");
+        pAdapter->Release();
+        return 3;
+    }
+
+    printf("Graphics Device #%u\n", adapterIndex);
+    printf("-----------------------\n");
+    printf("Vendor: 0x%x\n", GPUVendorId);
+    printf("Device: 0x%x\n", GPUDeviceId);
+    printf("Video Memory: %I64u MB\n", VideoMemory / (1024 * 1024));
+    printf("Description: %S\n", GPUDescription.c_str());
+
+    //
+    // Similar to the CPU brand, we can also parse the GPU description string
+    // for information like whether the GPU is an Intel Iris or Iris Pro part.
+    //
+    if (GPUVendorId == INTEL_VENDOR_ID) {
+        if (GPUDescription.find(L"Iris") != std::wstring::npos) {
+            if (GPUDescription.find(L"Pro") != std::wstring::npos) {
+                printf("             Iris Pro Graphics Brand Found\n");
+            } else {
+                printf("             Iris Graphics Brand Found\n");
+            }
+        }
+    }
+
+    //
+    // This sample includes a .cfg file that maps known vendor and device IDs
+    // to example quality presets.  This looks up the preset for the IDs
+    // queried above.
+    //
+    PresetLevel defPresets = getDefaultFidelityPresets(GPUVendorId, GPUDeviceId);
+    switch (defPresets) {
+    case NotCompatible: printf("Default Presets: NotCompatible\n"); break;
+    case Low:           printf("Default Presets: Low\n"); break;
+    case Medium:        printf("Default Presets: Medium\n"); break;
+    case MediumPlus:    printf("Default Presets: Medium+\n"); break;
+    case High:          printf("Default Presets: High\n"); break;
+    case Undefined:     printf("Default Presets: Undefined\n"); break;
+    }
+
+    //
+    // Check if Intel DirectX extensions are a vailable on this sytem.
+    //
+    unsigned int extensionVersion = checkDxExtensionVersion(pAdapter);
+    if (extensionVersion >= ID3D10::EXTENSION_INTERFACE_VERSION_1_0) {
+        printf("Supports Intel Iris Graphics extensions:\n");
+        printf("\tpixel sychronization\n");
+        printf("\tinstant access of graphics memory\n");
+    } else {
+        printf("Does not support Intel Iris Graphics extensions\n");
+    }
+
+    //
+    // In DirectX, Intel exposes additional information through the driver that can be obtained
+    // querying a special DX counter
+    //
+    if (GPUVendorId == INTEL_VENDOR_ID) {
+        INTEL_GPU_ARCHITECTURE arch = getIntelGPUArchitecture(GPUDeviceId);
+        printf("Architecture (from device id): %s (0x%x)\n", getIntelGPUArchitectureString(arch), arch);
+
+        IntelDeviceInfo info = {};
+        if (getIntelDeviceInfo(pAdapter, &info)) {
+            //
+            // Older versions of the IntelDeviceInfo query only return
+            // GPUMaxFreq and GPUMinFreq, all other members will be zero.
+            //
+            if (info.GPUArchitecture != 0) {
+                arch = (INTEL_GPU_ARCHITECTURE) info.GPUArchitecture;
+                printf("Architecture (from device info): %s (0x%x)\n", getIntelGPUArchitectureString(arch), arch);
+                printf("EU Count:          %d\n", info.EUCount);
+                printf("Package TDP:       %d W\n", info.PackageTDP);
+                printf("Max Fill Rate:     %d pixel/clock\n", info.MaxFillRate);
+            }
+
+            printf("GPU Max Frequency: %d MHz\n", info.GPUMaxFreq);
+            printf("GPU Min Frequency: %d MHz\n", info.GPUMinFreq);
+        }
     }
 
     printf("\n");
     printf("Press any key to exit...\n");
 
-	_getch();
+    _getch();
+
+    pAdapter->Release();
     return 0;
 }
 
-/*****************************************************************************************
-* getDefaultFidelityPresets
-*
-*     Function to find the default fidelity preset level, based on the type of
-*     graphics adapter present.
-*
-*     The guidelines for graphics preset levels for Intel devices is a generic one
-*     based on our observations with various contemporary games. You would have to
-*     change it if your game already plays well on the older hardware even at high
-*     settings.
-*
-*****************************************************************************************/
-
-PresetLevel getDefaultFidelityPresets(unsigned int VendorId, unsigned int DeviceId)
-{
-	//
-	// Look for a config file that qualifies devices from any vendor
-	// The code here looks for a file with one line per recognized graphics
-	// device in the following format:
-	//
-	// VendorIDHex, DeviceIDHex, CapabilityEnum      ;Commented name of card
-	//
-
-	FILE *fp = NULL;
-	const char *cfgFileName = nullptr;
-
-	switch (VendorId)
-	{
-	case 0x8086:
-		cfgFileName = "IntelGfx.cfg";
-		break;
-
-	//case 0x1002:
-	//    cfgFileName =  "ATI.cfg"; // not provided
-	//    break;
-
-	//case 0x10DE:
-	//    cfgFileName = "Nvidia.cfg"; // not provided
-	//    break;
-	}
-
-	fopen_s(&fp, cfgFileName, "r");
-
-	PresetLevel presets = Undefined;
-
-	if (fp)
-	{
-		char line[100];
-		char* context = NULL;
-
-		char* szVendorId = NULL;
-		char* szDeviceId = NULL;
-		char* szPresetLevel = NULL;
-
-		//
-		// read one line at a time till EOF
-		//
-		while (fgets(line, 100, fp))
-		{
-			//
-			// Parse and remove the comment part of any line
-			//
-			int i; for (i = 0; line[i] && line[i] != ';'; i++); line[i] = '\0';
-
-			//
-			// Try to extract VendorId, DeviceId and recommended Default Preset Level
-			//
-			szVendorId = strtok_s(line, ",\n", &context);
-			szDeviceId = strtok_s(NULL, ",\n", &context);
-			szPresetLevel = strtok_s(NULL, ",\n", &context);
-
-			if ((szVendorId == NULL) ||
-				(szDeviceId == NULL) ||
-				(szPresetLevel == NULL))
-			{
-				continue;  // blank or improper line in cfg file - skip to next line
-			}
-
-			unsigned int vId, dId;
-			sscanf_s(szVendorId, "%x", &vId);
-			sscanf_s(szDeviceId, "%x", &dId);
-
-			//
-			// If current graphics device is found in the cfg file, use the 
-			// pre-configured default Graphics Presets setting.
-			//
-			if ((vId == VendorId) && (dId == DeviceId))
-			{
-				char s[10];
-				sscanf_s(szPresetLevel, "%s", s, (unsigned int) _countof(s));
-
-				if (!_stricmp(s, "Low"))
-					presets = Low;
-				else if (!_stricmp(s, "Medium"))
-					presets = Medium;
-				else if (!_stricmp(s, "Medium+"))
-					presets = MediumPlus;
-				else if (!_stricmp(s, "High"))
-					presets = High;
-				else
-					presets = NotCompatible;
-
-				break;
-			}
-		}
-
-		fclose(fp);  // Close open file handle
-	}
-	else
-	{
-		printf("%s not found! Presets undefined.\n", cfgFileName);
-	}
-
-	//
-	// If the current graphics device was not listed in any of the config
-	// files, or if config file not found, use Low settings as default.
-	// This should be changed to reflect the desired behavior for unknown
-	// graphics devices.
-	//
-	if (presets == Undefined) {
-		presets = Low;
-	}
-
-	return presets;
-}
