@@ -262,10 +262,24 @@ INTEL_GPU_ARCHITECTURE getIntelGPUArchitecture(unsigned int deviceId)
     if (idhi == 0x5900) {
         return IGFX_KABYLAKE;
     }
+	
+	if( idhi == 0x3100 )
+	{
+		return IGFX_GEMINILAKE;;
+	}
 
     if (idhi == 0x3E00) {
-        return IGFX_COFFEELAKE;
+		if( idlo == 0x00A0 || idlo == 0x00A1 )
+		{
+			return IGFX_WHISKEYLAKE;
+		}
+		return IGFX_COFFEELAKE;
     }
+
+	if( idhi == 0x8A00 )
+	{
+		return IGFX_ICELAKE;
+	}
 
     return IGFX_UNKNOWN;
 }

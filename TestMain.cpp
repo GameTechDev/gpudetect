@@ -48,6 +48,9 @@ char const* getIntelGPUArchitectureString(INTEL_GPU_ARCHITECTURE arch)
     case IGFX_SKYLAKE:     return "Skylake";
     case IGFX_KABYLAKE:    return "Kabylake";
     case IGFX_COFFEELAKE:  return "Coffeelake";
+	case IGFX_GEMINILAKE:  return "Geminilake";
+	case IGFX_WHISKEYLAKE: return "Whiskeylake";
+	case IGFX_ICELAKE:     return "Icelake";
     }
 
     return "Unknown";
