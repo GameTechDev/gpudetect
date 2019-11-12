@@ -22,33 +22,36 @@
 #include <dxgi.h>
 #include <string>
 
-enum {
-    INTEL_VENDOR_ID = 0x8086,
+enum
+{
+	INTEL_VENDOR_ID = 0x8086,
 };
 
-enum INTEL_GPU_ARCHITECTURE {
-    IGFX_UNKNOWN     = 0x00,
-    IGFX_SANDYBRIDGE = 0x0C,
-    IGFX_IVYBRIDGE,
-    IGFX_HASWELL,
-    IGFX_VALLEYVIEW,
-    IGFX_BROADWELL,
-    IGFX_CHERRYVIEW,
-    IGFX_SKYLAKE,
-    IGFX_KABYLAKE,
-    IGFX_COFFEELAKE,
-	IGFX_GEMINILAKE  = 0x17,
+enum INTEL_GPU_ARCHITECTURE
+{
+	IGFX_UNKNOWN = 0x00,
+	IGFX_SANDYBRIDGE = 0x0C,
+	IGFX_IVYBRIDGE,
+	IGFX_HASWELL,
+	IGFX_VALLEYVIEW,
+	IGFX_BROADWELL,
+	IGFX_CHERRYVIEW,
+	IGFX_SKYLAKE,
+	IGFX_KABYLAKE,
+	IGFX_COFFEELAKE,
+	IGFX_GEMINILAKE = 0x17,
 	IGFX_WHISKEYLAKE, // Has no LP code assigned, so this is using an unused enum slot.
-	IGFX_ICELAKE     = 0x1D
+	IGFX_ICELAKE = 0x1D
 };
 
-struct IntelDeviceInfo {
-    DWORD GPUMaxFreq;
-    DWORD GPUMinFreq;
-    DWORD GPUArchitecture;   // INTEL_GPU_ARCHITECTURE
-    DWORD EUCount;
-    DWORD PackageTDP;
-    DWORD MaxFillRate;
+struct IntelDeviceInfo
+{
+	DWORD GPUMaxFreq;
+	DWORD GPUMinFreq;
+	DWORD GPUArchitecture;   // INTEL_GPU_ARCHITECTURE
+	DWORD EUCount;
+	DWORD PackageTDP;
+	DWORD MaxFillRate;
 };
 
 /*******************************************************************************
@@ -58,7 +61,7 @@ struct IntelDeviceInfo {
  *     availble for graphics (VideoMemory), and the GPU's Description.
  *
  ******************************************************************************/
-bool getGraphicsDeviceInfo(IDXGIAdapter* pAdapter, unsigned int* VendorId, unsigned int* DeviceId, unsigned __int64* VideoMemory, std::wstring* Description);
+bool getGraphicsDeviceInfo( IDXGIAdapter* pAdapter, unsigned int* VendorId, unsigned int* DeviceId, unsigned __int64* VideoMemory, std::wstring* Description );
 
 /*******************************************************************************
  * getIntelDeviceInfo
@@ -68,7 +71,7 @@ bool getGraphicsDeviceInfo(IDXGIAdapter* pAdapter, unsigned int* VendorId, unsig
  *     zero).
  *
  ******************************************************************************/
-bool getIntelDeviceInfo(IDXGIAdapter* pAdapter, IntelDeviceInfo* pIntelDeviceInfo);
+bool getIntelDeviceInfo( IDXGIAdapter* pAdapter, IntelDeviceInfo* pIntelDeviceInfo );
 
 
 /*******************************************************************************
@@ -80,7 +83,7 @@ bool getIntelDeviceInfo(IDXGIAdapter* pAdapter, IntelDeviceInfo* pIntelDeviceInf
  *      synchronization and instant access of graphics memory.
  *
  ******************************************************************************/
-unsigned int checkDxExtensionVersion(IDXGIAdapter* pAdapter);
+unsigned int checkDxExtensionVersion( IDXGIAdapter* pAdapter );
 
 /*******************************************************************************
  * getIntelGPUArchitecture
@@ -93,7 +96,7 @@ unsigned int checkDxExtensionVersion(IDXGIAdapter* pAdapter);
  *      example, a newer architecture may have an lower deviceID.
  *
  ******************************************************************************/
-INTEL_GPU_ARCHITECTURE getIntelGPUArchitecture(unsigned int deviceId);
+INTEL_GPU_ARCHITECTURE getIntelGPUArchitecture( unsigned int deviceId );
 
 /*******************************************************************************
  * getCPUInfo
@@ -101,5 +104,5 @@ INTEL_GPU_ARCHITECTURE getIntelGPUArchitecture(unsigned int deviceId);
  *      Parses CPUID output to find the brand and vendor strings.
  *
  ******************************************************************************/
-void getCPUInfo(std::string* cpubrand, std::string* cpuvendor);
+void getCPUInfo( std::string* cpubrand, std::string* cpuvendor );
 
