@@ -32,18 +32,26 @@ char const* GPUDetect::getIntelGPUArchitectureString( INTEL_GPU_ARCHITECTURE arc
 {
 	switch( arch )
 	{
-	case IGFX_SANDYBRIDGE: return "Sandy Bridge";
-	case IGFX_IVYBRIDGE:   return "Ivy Bridge";
-	case IGFX_HASWELL:     return "Haswell";
-	case IGFX_VALLEYVIEW:  return "ValleyView";
-	case IGFX_BROADWELL:   return "Broadwell";
-	case IGFX_CHERRYVIEW:  return "Cherryview";
-	case IGFX_SKYLAKE:     return "Skylake";
-	case IGFX_KABYLAKE:    return "Kabylake";
-	case IGFX_COFFEELAKE:  return "Coffeelake";
-	case IGFX_GEMINILAKE:  return "Geminilake";
-	case IGFX_WHISKEYLAKE: return "Whiskeylake";
-	case IGFX_ICELAKE:     return "Icelake";
+	case IGFX_SANDYBRIDGE:   return "Sandy Bridge";
+	case IGFX_IVYBRIDGE:     return "Ivy Bridge";
+	case IGFX_HASWELL:       return "Haswell";
+	case IGFX_VALLEYVIEW:    return "ValleyView";
+	case IGFX_BROADWELL:     return "Broadwell";
+	case IGFX_CHERRYVIEW:    return "Cherryview";
+	case IGFX_SKYLAKE:       return "Skylake";
+	case IGFX_KABYLAKE:      return "Kabylake";
+	case IGFX_COFFEELAKE:    return "Coffeelake";
+	case IGFX_WILLOWVIEW:    return "Willowview";
+	case IGFX_BROXTON:       return "Broxton";
+	case IGFX_GEMINILAKE:    return "Geminilake";
+	case IGFX_CANNONLAKE:    return "Cannonlake";
+	case IGFX_ICELAKE:       return "Icelake";
+	case IGFX_ICELAKE_LP:    return "Icelake Low Power";
+	case IGFX_LAKEFIELD:     return "Lakefield";
+
+
+	// Architectures with no unique enum value, but that still can be determined from DeviceID
+	case IGFX_WHISKEYLAKE:   return "Whiskeylake";
 	}
 
 	return "Unknown";
@@ -90,10 +98,12 @@ GPUDetect::INTEL_GPU_ARCHITECTURE GPUDetect::getIntelGPUArchitecture( unsigned i
 
 	if( idhi == 0x3E00 )
 	{
+		
 		if( idlo == 0x00A0 || idlo == 0x00A1 )
 		{
 			return IGFX_WHISKEYLAKE;
 		}
+		
 		return IGFX_COFFEELAKE;
 	}
 
