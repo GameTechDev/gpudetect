@@ -23,6 +23,15 @@
 #define GPUDETECT_ERROR_DXGI_COUNTER_CREATION   GPUDETECT_ERROR_GENERAL_DXGI_COUNTER * 23
 #define GPUDETECT_ERROR_DXGI_COUNTER_GET_DATA   GPUDETECT_ERROR_GENERAL_DXGI_COUNTER * 29
 
+/// Windows Registry Errors
+#define GPUDETECT_ERROR_REG_GENERAL_FAILURE     31
+#define GPUDETECT_ERROR_REG_NO_D3D_KEY          GPUDETECT_ERROR_REG_GENERAL_FAILURE * 37 // A directX key was not found in the registry in the expected location
+#define GPUDETECT_ERROR_REG_MISSING_DRIVER_INFO GPUDETECT_ERROR_REG_GENERAL_FAILURE * 41 // Driver info is missing from the registry
+
+/// Precondition Errors
+#define GPUDETECT_CHECK_PRECONDITIONS // Comment this out to remove precondition checks
+#define GPUDETECT_ERROR_BAD_DATA                47
+
 namespace GPUDetect
 {
 	enum
@@ -41,63 +50,6 @@ namespace GPUDetect
 		Undefined  // No predefined setting found in cfg file. 
 				   // Use a default level for unknown video cards.
 	};
-
-	/*******************************************************************************
-	 * InitExtensionInfo
-	 *
-	 *     Loads available info from the Dx11 extension interface. Use this to force
-	 *     the GPUDetector to load this data now instead of when it is first
-	 *     requested. Returns EXIT_SUCCESS if no error was encountered, otherwise
-	 *     returns an error code.
-	 *
-	 *     gpuData
-	 *         The struct in which the information will be stored.
-	 *
-	 *     adapterIndex
-	 *         The index of the adapter to get the information from. If adapterIndex
-	 *         is -1, the adapterIndex value from gpuData will be used.
-	 *
-	 ******************************************************************************/
-	int InitExtensionInfo( struct GPUData* const gpuData, int adapterIndex = -1 );
-
-	/*******************************************************************************
-	 * InitCounterInfo
-	 *
-	 *     Loads available info from Dx11 hardware counters. Use this to force
-	 *     the GPUDetector to load this data now instead of when it is first
-	 *     requested. Returns EXIT_SUCCESS if no error was encountered, otherwise
-	 *     returns an error code.
-	 *
-	 *     gpuData
-	 *         The struct in which the information will be stored.
-	 *
-	 *     adapterIndex
-	 *         The index of the adapter to get the information from. If adapterIndex
-	 *         is -1, the adapterIndex value from gpuData will be used.
-	 *
-	 ******************************************************************************/
-	int InitCounterInfo( struct GPUData* const gpuData, int adapterIndex = -1 );
-
-	/*******************************************************************************
-	 * GetDefaultFidelityPreset
-	 *
-	 *     Function to find the default fidelity preset level, based on the type of
-	 *     graphics adapter present.
-	 *
-	 *     The guidelines for graphics preset levels for Intel devices is a generic
-	 *     one based on our observations with various contemporary games. You would
-	 *     have to change it if your game already plays well on the older hardware
-	 *     even at high settings.
-	 *
-	 *     Presets for Intel are expected in a file named "IntelGFX.cfg". This
-	 *     method can also be easily modified to also read similar .cfg files
-	 *     detailing presets for other manufacturers.
-	 *
-	 *     gpuData
-	 *         The data for the GPU in question. 
-	 *
-	 ******************************************************************************/
-	PresetLevel GetDefaultFidelityPreset( const struct GPUData* const gpuData );
 
 	struct GPUData
 	{
@@ -168,7 +120,7 @@ namespace GPUDetect
 		 *     The driver-provided description of the GPU.
 		 *
 		 ******************************************************************************/
-		WCHAR description[128];
+		WCHAR description[ 128 ];
 
 		/*******************************************************************************
 		 * extentionVersion
@@ -221,7 +173,7 @@ namespace GPUDetect
 		 * advancedCounterDataAvalibility
 		 *
 		 *     Returns true if advanced counter data is available from this GPU.
-		 *     Older Intel products only provide the maximum and minimum GPU frequency 
+		 *     Older Intel products only provide the maximum and minimum GPU frequency
 		 *     via the hardware counters.
 		 *
 		 ******************************************************************************/
@@ -258,7 +210,227 @@ namespace GPUDetect
 		 *
 		 ******************************************************************************/
 		unsigned int maxFillRate;
+
+		///////////////////////
+		// D3D Registry Data //
+		///////////////////////
+
+		/*******************************************************************************
+		* dxDriverVersion
+		*
+		*     The version number for the adapter's driver. This is stored in a 4 part
+		*     version number that should be displayed in the format: "0.1.2.4"
+		*
+		******************************************************************************/
+		unsigned int dxDriverVersion[ 4 ];
+
+		/*******************************************************************************
+		 * d3dRegistryDataAvalibility
+		 *
+		 *     Is true if d3d registry data is populated. If this value is true and 
+		 *     vendorID == INTEL_VENDOR_ID, then the intelDriverInfo fields will be
+		 *     populated. If this value is false, all other registry data data will be 
+		 *     null.
+		 *
+		 ******************************************************************************/
+		bool d3dRegistryDataAvalibility;
+
+		struct IntelDriverInfo
+		{
+			/*******************************************************************************
+			 * isNewDriverVersionFormat
+			 *
+			 *     Is true if the intel driver version is the new format (100+).
+			 *     More info on this version number change can be found below:
+			 *     https://www.intel.com/content/www/us/en/support/articles/000005654/graphics-drivers.html
+			 *
+			 ******************************************************************************/
+			bool isNewDriverVersionFormat;
+
+			/// New version format
+
+			/*******************************************************************************
+			 * osVersionID
+			 *
+			 *     The OS version ID for this device's driver. This is the first
+			 *     section of the driver version number as illustrated by the 'X's below:
+			 *     XX.00.000.0000
+			 *     This can then be translated to a WDDM version using GetWDDMVersion().
+			 *
+			 ******************************************************************************/
+			unsigned int osVersionID;
+
+			/*******************************************************************************
+			 * directXVersionID
+			 *
+			 *     The directX version ID for this device's driver. This is the second
+			 *     section of the driver version number as illustrated by the 'X's below:
+			 *     00.XX.000.0000
+			 *     This can then be translated to a DirectX version number using
+			 *     GetDirectXVersion().
+			 *
+			 ******************************************************************************/
+			unsigned int directXVersionID;
+
+			/*******************************************************************************
+			 * buildNumber
+			 *
+			 *     The build number for this device's driver. This is the third and forth
+			 *     section of the driver version number as illustrated by the 'X's below:
+			 *     00.00.XXX.XXXX
+			 *
+			 *     If the driver uses the new version format, this will be just the last
+			 *     section of the driver version number as shown below:
+			 *     00.00.000.XXXX
+			 *
+			 ******************************************************************************/
+			unsigned int driverBuildNumber;
+
+			/// Old version format
+
+			/*******************************************************************************
+			 * driverBaselineNumber
+			 *
+			 *     The baseline number for this device's driver. This is the first and second
+			 *     section of the driver version number as illustrated by the 'X's below:
+			 *     XX.XX.000.0000
+			 *
+			 ******************************************************************************/
+			unsigned int driverBaselineNumber;
+
+			/*******************************************************************************
+			 * driverReleaseRevision
+			 *
+			 *     The release revision for this device's driver. This is the third
+			 *     section of the driver version number as illustrated by the 'X's below:
+			 *     00.00.XXX.0000
+			 *
+			 ******************************************************************************/
+			unsigned int driverReleaseRevision;
+		} intelDriverInfo;
 	};
+
+	/*******************************************************************************
+	 * InitExtensionInfo
+	 *
+	 *     Loads available info from the Dx11 extension interface. Returns 
+	 *     EXIT_SUCCESS if no error was encountered, otherwise returns an error code.
+	 *
+	 *     gpuData
+	 *         The struct in which the information will be stored.
+	 *
+	 *     adapterIndex
+	 *         The index of the adapter to get the information from. If adapterIndex
+	 *         is -1, the adapterIndex value from gpuData will be used.
+	 *
+	 ******************************************************************************/
+	int InitExtensionInfo( struct GPUData* const gpuData, int adapterIndex = -1 );
+
+	/*******************************************************************************
+	 * InitCounterInfo
+	 *
+	 *     Loads available info from Dx11 hardware counters. Returns EXIT_SUCCESS 
+	 *     if no error was encountered, otherwise returns an error code. Requires 
+	 *     that InitExtensionInfo be run on gpuData before this is called.
+	 *
+	 *     gpuData
+	 *         The struct in which the information will be stored.
+	 *
+	 *     adapterIndex
+	 *         The index of the adapter to get the information from. If adapterIndex
+	 *         is -1, the adapterIndex value from gpuData will be used.
+	 *
+	 ******************************************************************************/
+	int InitCounterInfo( struct GPUData* const gpuData, int adapterIndex = -1 );
+
+	/*******************************************************************************
+	 * GetDefaultFidelityPreset
+	 *
+	 *     Function to find the default fidelity preset level, based on the type of
+	 *     graphics adapter present.
+	 *
+	 *     The guidelines for graphics preset levels for Intel devices is a generic
+	 *     one based on our observations with various contemporary games. You would
+	 *     have to change it if your game already plays well on the older hardware
+	 *     even at high settings.
+	 *
+	 *     Presets for Intel are expected in a file named "IntelGFX.cfg". This
+	 *     method can also be easily modified to also read similar .cfg files
+	 *     detailing presets for other manufacturers.
+	 *
+	 *     gpuData
+	 *         The data for the GPU in question. 
+	 *
+	 ******************************************************************************/
+	PresetLevel GetDefaultFidelityPreset( const struct GPUData* const gpuData );
+
+	/*******************************************************************************
+	 * InitDxDriverVersion
+	 *
+	 *     Loads the DirectX driver version for the given adapter from the windows 
+	 *     registry. Returns EXIT_SUCCESS if no error was encountered, otherwise 
+	 *     returns an error code. Requires that InitExtensionInfo be run on gpuData
+	 *     before this is called.
+	 *
+	 *     gpuData
+	 *         The struct in which the information will be stored.
+	 *
+	 ******************************************************************************/
+	int InitDxDriverVersion( struct GPUData* const gpuData );
+
+	/*******************************************************************************
+	 * CmpDriverVersions
+	 *
+	 *     Compares the driver versions of gpuA and gpuB. Returns a positive value
+	 *     if driverA is more recent, and returns a positive value if driverB is
+	 *     more recent. If the drivers are the same, the return value will be 0.
+	 *
+	 *     driverA
+	 *         The first driver to be compared.
+	 *
+	 *     driverB
+	 *         The second driver to be compared.
+	 *
+	 ******************************************************************************/
+	int CmpDriverVersions( const struct GPUData* const driverA, const struct GPUData* const driverB );
+
+	/*******************************************************************************
+	 * GetDriverVersionAsCString
+	 *
+	 *     Stores the driver version as a string in the 00.00.000.0000 format.
+	 *
+	 *     gpuData
+	 *         The struct that contains the driver version.
+	 *
+	 *     outString
+	 *         Where to store the resulting c string.
+	 *
+	 ******************************************************************************/
+	void GetDriverVersionAsCString( const struct GPUData* const gpuData, char* const outString );
+
+	/*******************************************************************************
+	 * GetWDDMVersion
+	 *
+	 *     Returns the Windows Display Driver Model (WDDM) number as derived from
+	 *     the driver version if possible. Otherwise, returns -1.0f.
+	 *
+	 *     gpuData
+	 *         The struct that contains the driver version.
+	 *
+	 ******************************************************************************/
+	float GetWDDMVersion( const struct GPUData* const gpuData );
+
+	/*******************************************************************************
+	 * GetDirectXVersion
+	 *
+	 *     Returns the directX version number as derived from the driver version if
+	 *     possible. Otherwise, returns -1.0f.
+	 *
+	 *     gpuData
+	 *         The struct that contains the driver version.
+	 *
+	 ******************************************************************************/
+	float GetDirectXVersion( const struct GPUData* const gpuData );
 }
 
 

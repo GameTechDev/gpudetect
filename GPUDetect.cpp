@@ -7,7 +7,7 @@
 
 #include "GPUDetect.h"
 
-IDXGIAdapter* pAdapter;
+#define MAX_KEY_LENGTH 255
 
 // This should only be needed for reading data from the counter
 struct IntelDeviceInfo
@@ -23,18 +23,27 @@ struct IntelDeviceInfo
 namespace GPUDetect
 {
 	// Returns 0 if successfully initialized
-	int InitAdapter( const struct GPUData* const gpuData );
-	int GetIntelDeviceInfo( IntelDeviceInfo* deviceInfo );
+	int InitAdapter( struct GPUData* const gpuData, IDXGIAdapter** pAdapter, int adapterIndex = -1 );
+	int GetIntelDeviceInfo( IntelDeviceInfo* deviceInfo, IDXGIAdapter* pAdapter );
 }
 
 int GPUDetect::InitExtensionInfo(  struct GPUData* const gpuData, int adapterIndex /* = -1 */ )
 {
+#ifdef GPUDETECT_CHECK_PRECONDITIONS
+	// Check preconditions
+	if( !( adapterIndex >= -1 ) )
+	{
+		return GPUDETECT_ERROR_BAD_DATA;
+	}
+#endif
+
 	if( adapterIndex != -1 )
 	{
 		gpuData->adapterIndex = adapterIndex;
 	}
 	
-	int adapterReturnCode = InitAdapter( gpuData );
+	IDXGIAdapter* pAdapter = nullptr;
+	int adapterReturnCode = InitAdapter( gpuData, &pAdapter, adapterIndex );
 	if( adapterReturnCode != EXIT_SUCCESS )
 	{
 		return adapterReturnCode;
@@ -104,29 +113,21 @@ int GPUDetect::InitExtensionInfo(  struct GPUData* const gpuData, int adapterInd
 
 int GPUDetect::InitCounterInfo( GPUData* const gpuData, int adapterIndex /* = -1 */ )
 {
+#ifdef GPUDETECT_CHECK_PRECONDITIONS
+	// Check preconditions
+	if( !( gpuData->vendorID != NULL && adapterIndex > -2 ) )
+	{
+		return GPUDETECT_ERROR_BAD_DATA;
+	}
+#endif
+
 	if( adapterIndex != -1 )
 	{
 		gpuData->adapterIndex = adapterIndex;
 	}
 
-	int adapterReturnCode = InitAdapter( gpuData );
-	if( adapterReturnCode != EXIT_SUCCESS )
-	{
-		return adapterReturnCode;
-	}
-
-	// We need to verify that this is an Intel GPU, so we need vendorID
-	// We'll do a lightweight fetch of that info if we don't have it already
-	if( gpuData->vendorID == 0 )
-	{
-		DXGI_ADAPTER_DESC AdapterDesc = {};
-		if( FAILED( pAdapter->GetDesc( &AdapterDesc ) ) )
-		{
-			pAdapter->Release();
-			return GPUDETECT_ERROR_DXGI_GET_ADAPTER_DESC;
-		}
-		gpuData->vendorID = AdapterDesc.VendorId;
-	}
+	IDXGIAdapter* pAdapter = nullptr;
+	InitAdapter( gpuData, &pAdapter, gpuData->adapterIndex );
 
 	//
 	// In DirectX, Intel exposes additional information through the driver that can be obtained
@@ -136,9 +137,10 @@ int GPUDetect::InitCounterInfo( GPUData* const gpuData, int adapterIndex /* = -1
 	if( gpuData->counterAvalibility )
 	{
 		IntelDeviceInfo info = { 0 };
-		int deviceInfoReturnCode = GetIntelDeviceInfo( &info );
+		int deviceInfoReturnCode = GetIntelDeviceInfo( &info, pAdapter );
 		if( deviceInfoReturnCode != EXIT_SUCCESS )
 		{
+			pAdapter->Release();
 			return deviceInfoReturnCode;
 		}
 		else
@@ -162,7 +164,6 @@ int GPUDetect::InitCounterInfo( GPUData* const gpuData, int adapterIndex /* = -1
 	}
 
 	pAdapter->Release();
-
 	return EXIT_SUCCESS;
 }
 
@@ -286,8 +287,274 @@ GPUDetect::PresetLevel GPUDetect::GetDefaultFidelityPreset( const struct GPUData
 	return presets;
 }
 
-int GPUDetect::InitAdapter( const struct GPUData* const gpuData )
+int GPUDetect::InitDxDriverVersion( GPUData * const gpuData )
 {
+#ifdef GPUDETECT_CHECK_PRECONDITIONS
+	// Check preconditions
+	if( !( gpuData->dxAdapterAvalibility == true ) )
+	{
+		return GPUDETECT_ERROR_BAD_DATA;
+	}
+#endif
+
+	// Fetch registry data
+	HKEY dxKeyHandle;
+	DWORD numOfAdapters = 0;
+	DWORD subKeyMaxLength;
+	LONG returnCode = RegOpenKeyExA( HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\DirectX", NULL, KEY_READ, &dxKeyHandle );
+
+	if( returnCode != ERROR_SUCCESS )
+	{
+		return GPUDETECT_ERROR_REG_NO_D3D_KEY; 
+	}
+
+	// Find all subkeys
+
+	RegQueryInfoKey(
+		dxKeyHandle,
+		NULL,
+		NULL,
+		NULL,
+		&numOfAdapters,
+		&subKeyMaxLength,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL
+	);
+	subKeyMaxLength += 1; // include the null character
+
+	uint64_t driverVersionRaw = 0;
+
+	bool foundSubkey = false;
+	char* subKeyName = new char[subKeyMaxLength];
+	for( unsigned int i = 0; i < numOfAdapters; ++i )
+	{
+		DWORD subKeyLength = subKeyMaxLength;
+		LONG returnCodeVendorID, returnCodeDeviceID;
+		LSTATUS returnStatus = RegEnumKeyExA(
+			dxKeyHandle,
+			i,
+			subKeyName,
+			&subKeyLength,
+			NULL,
+			NULL,
+			NULL,
+			NULL
+		);
+
+		if( returnStatus == ERROR_SUCCESS )
+		{
+			DWORD vendorID;
+			DWORD deviceID;
+			DWORD dwordSize = sizeof( DWORD );
+			DWORD qwordSize = sizeof( uint64_t );
+
+			returnCodeVendorID = RegGetValueA(
+				dxKeyHandle,
+				subKeyName,
+				"VendorId",
+				RRF_RT_DWORD,
+				NULL,
+				&vendorID,
+				&dwordSize
+			);
+
+			returnCodeDeviceID = RegGetValueA(
+				dxKeyHandle,
+				subKeyName,
+				"DeviceId",
+				RRF_RT_DWORD,
+				NULL,
+				&deviceID,
+				&dwordSize
+			);
+
+			if( returnCodeDeviceID == ERROR_SUCCESS && returnCodeVendorID == ERROR_SUCCESS // If we were able to retrieve the registry values
+				&& vendorID == gpuData->vendorID && deviceID == gpuData->deviceID ) // and if the vendor ID and device ID match
+			{
+				// We have our registry key! Let's get the driver version num now
+				foundSubkey = true;
+
+				returnCode = RegGetValueA(
+					dxKeyHandle,
+					subKeyName,
+					"DriverVersion",
+					RRF_RT_QWORD,
+					NULL,
+					&driverVersionRaw,
+					&qwordSize
+				);
+			}
+			
+		}
+	}
+	RegCloseKey( dxKeyHandle );
+	delete subKeyName;
+
+	if( !foundSubkey )
+	{
+		return GPUDETECT_ERROR_REG_MISSING_DRIVER_INFO;
+	}
+
+	// Now that we have our driver version as a DWORD, let's process that into something readable
+	gpuData->dxDriverVersion[ 0 ] = (unsigned int) ( ( driverVersionRaw & 0xFFFF000000000000 ) >> 16 * 3 );
+	gpuData->dxDriverVersion[ 1 ] = (unsigned int) ( ( driverVersionRaw & 0x0000FFFF00000000 ) >> 16 * 2 );
+	gpuData->dxDriverVersion[ 2 ] = (unsigned int) ( ( driverVersionRaw & 0x00000000FFFF0000 ) >> 16 * 1 );
+	gpuData->dxDriverVersion[ 3 ] = (unsigned int) ( ( driverVersionRaw & 0x000000000000FFFF ) );
+
+	// Further processing for Intel's driver versions
+	if( gpuData->vendorID == INTEL_VENDOR_ID )
+	{
+		// Determine which driver version format is being used
+		gpuData->intelDriverInfo.isNewDriverVersionFormat = gpuData->dxDriverVersion[ 2 ] >= 100;
+
+		if( gpuData->intelDriverInfo.isNewDriverVersionFormat )
+		{
+			gpuData->intelDriverInfo.osVersionID = gpuData->dxDriverVersion[ 0 ];
+			gpuData->intelDriverInfo.directXVersionID = gpuData->dxDriverVersion[ 1 ];
+			gpuData->intelDriverInfo.driverBuildNumber = gpuData->dxDriverVersion[ 2 ] * 10000 + gpuData->dxDriverVersion[ 3 ];
+		}
+		else
+		{
+			gpuData->intelDriverInfo.driverBaselineNumber = gpuData->dxDriverVersion[ 0 ] * 100 + gpuData->dxDriverVersion[ 1 ];
+			gpuData->intelDriverInfo.driverReleaseRevision = gpuData->dxDriverVersion[ 2 ];
+			gpuData->intelDriverInfo.driverBuildNumber = gpuData->dxDriverVersion[ 3 ];
+		}
+	}
+	
+	gpuData->d3dRegistryDataAvalibility = true;
+	return EXIT_SUCCESS;
+}
+
+int GPUDetect::CmpDriverVersions( const GPUData * const driverA, const GPUData * const driverB )
+{
+	if( driverA->intelDriverInfo.isNewDriverVersionFormat != driverB->intelDriverInfo.isNewDriverVersionFormat )
+	{
+		if( driverA->intelDriverInfo.isNewDriverVersionFormat )
+		{
+			return 1;
+		}
+		else
+		{
+			return -1;
+		}
+	}
+	else
+	{
+		// Compare OS / Baseline
+		if( driverA->intelDriverInfo.isNewDriverVersionFormat )
+		{
+			int osDiff = driverA->intelDriverInfo.osVersionID - driverB->intelDriverInfo.osVersionID;
+			if( osDiff != 0 )
+			{
+				return osDiff;
+			}
+		}
+		else
+		{
+			int baselineDiff = driverA->intelDriverInfo.driverBaselineNumber - driverB->intelDriverInfo.driverBaselineNumber;
+			if( baselineDiff != 0 )
+			{
+				return baselineDiff;
+			}
+		}
+
+		// Compare DirectXVersion / Release Version
+		if( driverA->intelDriverInfo.isNewDriverVersionFormat )
+		{
+			int dxDiff = driverA->intelDriverInfo.directXVersionID - driverB->intelDriverInfo.directXVersionID;
+			if( dxDiff != 0 )
+			{
+				return dxDiff;
+			}
+		}
+		else
+		{
+			int releaseDiff = driverA->intelDriverInfo.driverReleaseRevision - driverB->intelDriverInfo.driverReleaseRevision;
+			if( releaseDiff != 0 )
+			{
+				return releaseDiff;
+			}
+		}
+
+		// Compare build numbers (This is the same for both formats)
+		return driverA->intelDriverInfo.driverBuildNumber - driverB->intelDriverInfo.driverBuildNumber;
+	}
+}
+
+void GPUDetect::GetDriverVersionAsCString( const GPUData * const gpuData, char * const outString )
+{
+	sprintf_s( outString, 15, "%i.%i.%i.%i", gpuData->dxDriverVersion[ 0 ], gpuData->dxDriverVersion[ 1 ], gpuData->dxDriverVersion[ 2 ], gpuData->dxDriverVersion[ 3 ] );
+}
+
+float GPUDetect::GetWDDMVersion( const GPUData * const gpuData )
+{
+	if( !gpuData->d3dRegistryDataAvalibility || gpuData->vendorID != INTEL_VENDOR_ID )
+	{
+		return -1.0f;
+	}
+
+	switch( gpuData->intelDriverInfo.osVersionID )
+	{
+	// Most of the time, just shift the decimal to the left
+	default:
+		return (float)gpuData->intelDriverInfo.osVersionID / 10;
+
+	// Versions that can't be derived with shifting the decimal
+	case 10: return 1.3f;
+	case 9:  return 1.2f;
+	case 8:  return 1.1f;
+	case 7:  return 1.0f;
+
+	// OS IDs that come before WDDM
+	case 6:
+	case 5:
+	case 4:
+		return -1.0f;
+	}
+}
+
+float GPUDetect::GetDirectXVersion( const GPUData * const gpuData )
+{
+	if( !gpuData->d3dRegistryDataAvalibility || gpuData->vendorID != INTEL_VENDOR_ID )
+	{
+		return -1.0f;
+	}
+
+	switch( gpuData->intelDriverInfo.directXVersionID )
+	{
+	case 20: return 12.1f;
+	case 19: return 12.0f;
+	case 18: return 11.1f;
+	case 17: return 11.0f;
+	case 15: return 10.f; // 10.x
+	case 14: return 9.f;  //  9.x
+	case 13: return 8.f;  //  8.x
+	case 12: return 7.f;  //  7.x
+	case 11: return 6.f;  //  6.x
+
+	default: return -1.0;
+	}
+}
+
+int GPUDetect::InitAdapter( struct GPUData* const gpuData, IDXGIAdapter** pAdapter, int adapterIndex )
+{
+#ifdef GPUDETECT_CHECK_PRECONDITIONS
+	// Check preconditions
+	if( !( gpuData->adapterIndex >= -1 ) )
+	{
+		return GPUDETECT_ERROR_BAD_DATA;
+	}
+#endif
+
+	if( adapterIndex != -1 )
+	{
+		gpuData->adapterIndex = adapterIndex;
+	}
+
 	//
 	// We are relying on DXGI (supported on Windows Vista and later) to query
 	// the adapter, so fail if it is not available.
@@ -325,7 +592,7 @@ int GPUDetect::InitAdapter( const struct GPUData* const gpuData )
 		return GPUDETECT_ERROR_DXGI_FACTORY_CREATION;
 	}
 
-	if( FAILED( pFactory->EnumAdapters( gpuData->adapterIndex, (IDXGIAdapter**) &pAdapter ) ) )
+	if( FAILED( pFactory->EnumAdapters( gpuData->adapterIndex, (IDXGIAdapter**) pAdapter ) ) )
 	{
 		pFactory->Release();
 		FreeLibrary( hDXGI );
@@ -337,7 +604,7 @@ int GPUDetect::InitAdapter( const struct GPUData* const gpuData )
 	return EXIT_SUCCESS;
 }
 
-int GPUDetect::GetIntelDeviceInfo(IntelDeviceInfo* deviceInfo)
+int GPUDetect::GetIntelDeviceInfo(IntelDeviceInfo* deviceInfo, IDXGIAdapter* pAdapter )
 {
 	//
 	// First create the Device, must be SandyBridge or later to create D3D11
@@ -396,7 +663,6 @@ int GPUDetect::GetIntelDeviceInfo(IntelDeviceInfo* deviceInfo)
 		{
 			sscanf_s( sDesc, "Version %d", &intelDeviceInfoVersion );
 		}
-		printf( "Counter Name: %s\n", sName );
 		delete[] sName;
 		delete[] sUnits;
 		delete[] sDesc;

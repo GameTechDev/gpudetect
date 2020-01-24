@@ -45,14 +45,19 @@ void printError( int errorCode )
 {
 	fprintf( stderr, "Error: " );
 
-	if( errorCode % GPUDETECT_ERROR_GENERAL_DXGI )
+	if( errorCode % GPUDETECT_ERROR_GENERAL_DXGI == 0 )
 	{
 		fprintf( stderr, "DXGI: " );
 	} 
 	
-	if( errorCode % GPUDETECT_ERROR_GENERAL_DXGI_COUNTER )
+	if( errorCode % GPUDETECT_ERROR_GENERAL_DXGI_COUNTER == 0 )
 	{
 		fprintf( stderr, "DXGI Counter: " );
+	}
+
+	if( errorCode % GPUDETECT_ERROR_REG_GENERAL_FAILURE == 0 )
+	{
+		fprintf( stderr, "Registry: " );
 	}
 
 	switch( errorCode )
@@ -88,6 +93,17 @@ void printError( int errorCode )
 	case GPUDETECT_ERROR_DXGI_COUNTER_GET_DATA:
 		fprintf( stderr, "Could not get DXGI counter data\n" );
 		break;
+
+	case GPUDETECT_ERROR_REG_NO_D3D_KEY:
+		fprintf( stderr, "D3D Driver info was not located in the expected location in the registry\n" );
+		break;
+
+	case GPUDETECT_ERROR_REG_MISSING_DRIVER_INFO:
+		fprintf( stderr, "Could not find a D3D driver matching the device ID and vendor ID of this adapter\n" );
+		break;
+
+	case GPUDETECT_ERROR_BAD_DATA:
+		fprintf( stderr, "Precondition of function not met\n" );
 
 	default:
 		fprintf( stderr, "Unknown error\n" );
@@ -134,6 +150,40 @@ int main( int argc, char** argv )
 		printf( "Device: 0x%x\n", gpuData.deviceID );
 		printf( "Video Memory: %I64u MB\n", gpuData.videoMemory / ( 1024 * 1024 ) );
 		printf( "Description: %S\n", gpuData.description );
+		printf( "\n" );
+
+		//
+		//  Find and print driver version information
+		//
+		GPUDetect::InitDxDriverVersion( &gpuData );
+		if( gpuData.d3dRegistryDataAvalibility )
+		{
+			printf( "\nDriver Information\n" );
+			printf( "-----------------------\n" );
+			char driverVersion[ 16 ];
+			GPUDetect::GetDriverVersionAsCString( &gpuData, driverVersion );
+			printf( "Driver Version: %s\n", driverVersion );
+
+			// Print out additional data
+			if( gpuData.vendorID == GPUDetect::INTEL_VENDOR_ID )
+			{
+				
+				if( gpuData.intelDriverInfo.isNewDriverVersionFormat )
+				{
+					printf( "WDDM Version: %1.1f\n", GPUDetect::GetWDDMVersion( &gpuData ) );
+					printf( "DirectX Version: %1.1f\n", GPUDetect::GetDirectXVersion( &gpuData ) );
+					printf( "Build Number: %3i.%4i\n", gpuData.intelDriverInfo.driverBuildNumber / 10000, gpuData.intelDriverInfo.driverBuildNumber % 10000 );
+				}
+				else
+				{
+					printf( "Version Baseline: %2i.%2i\n", gpuData.intelDriverInfo.driverBaselineNumber / 100, gpuData.intelDriverInfo.driverBaselineNumber % 100 );
+					printf( "Release Revision: %i\n", gpuData.intelDriverInfo.driverReleaseRevision );
+					printf( "Build Number: %i\n", gpuData.intelDriverInfo.driverBuildNumber );
+				}
+			}
+
+			printf( "\n" );
+		}
 
 		//
 		// Similar to the CPU brand, we can also parse the GPU description string
