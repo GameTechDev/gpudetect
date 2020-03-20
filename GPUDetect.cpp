@@ -22,12 +22,11 @@ struct IntelDeviceInfo
 
 namespace GPUDetect
 {
-	// Returns 0 if successfully initialized
-	int InitAdapter( struct GPUData* const gpuData, IDXGIAdapter** pAdapter, int adapterIndex = -1 );
-	int GetIntelDeviceInfo( IntelDeviceInfo* deviceInfo, IDXGIAdapter* pAdapter );
+	// Returns RETURN_SUCCESS if successfully initialized
+	int GetIntelDeviceInfo( IntelDeviceInfo* deviceInfo, ID3D11Device* device );
 }
 
-int GPUDetect::InitExtensionInfo(  struct GPUData* const gpuData, int adapterIndex /* = -1 */ )
+int GPUDetect::InitAll( GPUData * const gpuData, int adapterIndex )
 {
 #ifdef GPUDETECT_CHECK_PRECONDITIONS
 	// Check preconditions
@@ -41,81 +40,57 @@ int GPUDetect::InitExtensionInfo(  struct GPUData* const gpuData, int adapterInd
 	{
 		gpuData->adapterIndex = adapterIndex;
 	}
+
+	IDXGIAdapter* adapter;
+	int returnCode = InitAdapter( &adapter, gpuData->adapterIndex );
+	if( returnCode != EXIT_SUCCESS )
+	{
+		return returnCode;
+	}
+
+	ID3D11Device* device;
+	returnCode = InitDevice( adapter, &device );
+	if( returnCode != EXIT_SUCCESS )
+	{
+		adapter->Release();
+		return returnCode;
+	}
 	
-	IDXGIAdapter* pAdapter = nullptr;
-	int adapterReturnCode = InitAdapter( gpuData, &pAdapter, adapterIndex );
-	if( adapterReturnCode != EXIT_SUCCESS )
+	returnCode = InitAll( gpuData, adapter, device );
+
+	adapter->Release();
+	device->Release();
+	return returnCode;
+}
+
+int GPUDetect::InitAll( GPUData * const gpuData, IDXGIAdapter * adapter, ID3D11Device * device )
+{
+	int returnCode = InitExtensionInfo( gpuData, adapter, device );
+	if( returnCode != EXIT_SUCCESS )
 	{
-		return adapterReturnCode;
+		return returnCode;
 	}
 
-	DXGI_ADAPTER_DESC AdapterDesc = {};
-	if( FAILED( pAdapter->GetDesc( &AdapterDesc ) ) )
+	returnCode = InitCounterInfo( gpuData, device );
+	if( returnCode != EXIT_SUCCESS )
 	{
-		pAdapter->Release();
-		return GPUDETECT_ERROR_DXGI_ADAPTER_CREATION;
+		return returnCode;
 	}
 
-	gpuData->vendorID = AdapterDesc.VendorId;
-	gpuData->deviceID = AdapterDesc.DeviceId;
-	wcscpy_s( gpuData->description, 128, AdapterDesc.Description );
-	gpuData->architectureCounter = getIntelGPUArchitecture( gpuData->deviceID );
-
-	if( AdapterDesc.VendorId == 0x8086 && AdapterDesc.DedicatedVideoMemory <= 512 * 1024 * 1024 )
+	returnCode = InitDxDriverVersion( gpuData );
+	if( returnCode != EXIT_SUCCESS )
 	{
-		gpuData->isUMAArchitecture = true;
+		return returnCode;
 	}
-
-#ifdef _WIN32_WINNT_WIN10
-	ID3D11Device* pDevice = nullptr;
-	if( SUCCEEDED( D3D11CreateDevice( pAdapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &pDevice, NULL, NULL ) ) )
-	{
-		ID3D11Device3* pDevice3 = nullptr;
-		if( SUCCEEDED( pDevice->QueryInterface( __uuidof( ID3D11Device3 ), (void**) &pDevice3 ) ) )
-		{
-			D3D11_FEATURE_DATA_D3D11_OPTIONS2 FeatureData = {};
-			if( SUCCEEDED( pDevice3->CheckFeatureSupport( D3D11_FEATURE_D3D11_OPTIONS2, &FeatureData, sizeof( FeatureData ) ) ) )
-			{
-				gpuData->isUMAArchitecture = FeatureData.UnifiedMemoryArchitecture == TRUE;
-			}
-			pDevice3->Release();
-		}
-		pDevice->Release();
-	}
-#endif // _WIN32_WINNT_WIN10
-
-	if( gpuData->isUMAArchitecture )
-	{
-		gpuData->videoMemory = (unsigned __int64) AdapterDesc.SharedSystemMemory;
-	}
-	else
-	{
-		gpuData->videoMemory = (unsigned __int64) AdapterDesc.DedicatedVideoMemory;
-	}
-
-	if( !FAILED( D3D11CreateDevice( pAdapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &pDevice, NULL, NULL ) ) )
-	{
-		ID3D10::CAPS_EXTENSION intelExtCaps = {};
-		if( S_OK == GetExtensionCaps( pDevice, &intelExtCaps ) )
-		{
-			gpuData->extentionVersion = intelExtCaps.DriverVersion;
-		}
-		pDevice->Release();
-
-		gpuData->intelExtentionAvalibility = ( gpuData->extentionVersion >= ID3D10::EXTENSION_INTERFACE_VERSION_1_0 );
-	}
-
-	gpuData->dxAdapterAvalibility = true;
-	pAdapter->Release();
 
 	return EXIT_SUCCESS;
 }
 
-int GPUDetect::InitCounterInfo( GPUData* const gpuData, int adapterIndex /* = -1 */ )
+int GPUDetect::InitExtensionInfo( struct GPUData* const gpuData, int adapterIndex /* = -1 */ )
 {
 #ifdef GPUDETECT_CHECK_PRECONDITIONS
 	// Check preconditions
-	if( !( gpuData->vendorID != NULL && adapterIndex > -2 ) )
+	if( !( adapterIndex >= -1 ) )
 	{
 		return GPUDETECT_ERROR_BAD_DATA;
 	}
@@ -126,9 +101,121 @@ int GPUDetect::InitCounterInfo( GPUData* const gpuData, int adapterIndex /* = -1
 		gpuData->adapterIndex = adapterIndex;
 	}
 
-	IDXGIAdapter* pAdapter = nullptr;
-	InitAdapter( gpuData, &pAdapter, gpuData->adapterIndex );
+	IDXGIAdapter* adapter = nullptr;
+	int returnCode = InitAdapter( &adapter, gpuData->adapterIndex );
+	if( returnCode != EXIT_SUCCESS )
+	{
+		return returnCode;
+	}
 
+	ID3D11Device* device = nullptr;
+	returnCode = InitDevice( adapter, &device );
+	if( returnCode != EXIT_SUCCESS )
+	{
+		adapter->Release();
+		return returnCode;
+	}
+
+	returnCode = InitExtensionInfo( gpuData, adapter, device );
+
+	adapter->Release();
+	device->Release();
+	return returnCode;
+}
+
+int GPUDetect::InitExtensionInfo( struct GPUData* const gpuData, IDXGIAdapter* adapter, ID3D11Device* device )
+{
+	DXGI_ADAPTER_DESC AdapterDesc = {};
+	if( FAILED( adapter->GetDesc( &AdapterDesc ) ) )
+	{
+		return GPUDETECT_ERROR_DXGI_ADAPTER_CREATION;
+	}
+
+	gpuData->vendorID = AdapterDesc.VendorId;
+	gpuData->deviceID = AdapterDesc.DeviceId;
+	gpuData->adapterLUID = AdapterDesc.AdapterLuid;
+	wcscpy_s( gpuData->description, 128, AdapterDesc.Description );
+	gpuData->architectureCounter = getIntelGPUArchitecture( gpuData->deviceID );
+
+	if( AdapterDesc.VendorId == 0x8086 && AdapterDesc.DedicatedVideoMemory <= 512 * 1024 * 1024 )
+	{
+		gpuData->isUMAArchitecture = true;
+	}
+
+#ifdef _WIN32_WINNT_WIN10
+	ID3D11Device3* pDevice3 = nullptr;
+	if( SUCCEEDED( device->QueryInterface( __uuidof( ID3D11Device3 ), (void**) &pDevice3 ) ) )
+	{
+		D3D11_FEATURE_DATA_D3D11_OPTIONS2 FeatureData = {};
+		if( SUCCEEDED( pDevice3->CheckFeatureSupport( D3D11_FEATURE_D3D11_OPTIONS2, &FeatureData, sizeof( FeatureData ) ) ) )
+		{
+
+			gpuData->isUMAArchitecture = FeatureData.UnifiedMemoryArchitecture == TRUE;
+		}
+		pDevice3->Release();
+	}
+#endif // _WIN32_WINNT_WIN10
+
+
+	if( gpuData->isUMAArchitecture )
+	{
+		gpuData->videoMemory = (unsigned __int64) AdapterDesc.SharedSystemMemory;
+	}
+	else
+	{
+		gpuData->videoMemory = (unsigned __int64) AdapterDesc.DedicatedVideoMemory;
+	}
+	
+	ID3D10::CAPS_EXTENSION intelExtCaps = {};
+	if( S_OK == GetExtensionCaps( device, &intelExtCaps ) )
+	{
+		gpuData->extentionVersion = intelExtCaps.DriverVersion;
+	}
+
+	gpuData->intelExtentionAvalibility = ( gpuData->extentionVersion >= ID3D10::EXTENSION_INTERFACE_VERSION_1_0 );
+
+	gpuData->dxAdapterAvalibility = true;
+	return EXIT_SUCCESS;
+}
+
+int GPUDetect::InitCounterInfo( GPUData* const gpuData, int adapterIndex /* = -1 */ )
+{
+#ifdef GPUDETECT_CHECK_PRECONDITIONS
+	// Check preconditions
+	if( !( adapterIndex >= -1 ) )
+	{
+		return GPUDETECT_ERROR_BAD_DATA;
+	}
+#endif
+
+	if( adapterIndex != -1 )
+	{
+		gpuData->adapterIndex = adapterIndex;
+	}
+
+	IDXGIAdapter* adapter = nullptr;
+	int returnCode = InitAdapter( &adapter, adapterIndex );
+	if( returnCode != EXIT_SUCCESS )
+	{
+		return returnCode;
+	}
+
+	ID3D11Device* device = nullptr;
+	returnCode = InitDevice( adapter, &device );
+	if( returnCode != EXIT_SUCCESS )
+	{
+		adapter->Release();
+		return returnCode;
+	}
+
+	returnCode = InitCounterInfo( gpuData, device );
+
+	adapter->Release();
+	return returnCode;
+}
+
+int GPUDetect::InitCounterInfo( struct GPUData* const gpuData, ID3D11Device* device )
+{
 	//
 	// In DirectX, Intel exposes additional information through the driver that can be obtained
 	// querying a special DX counter
@@ -137,10 +224,9 @@ int GPUDetect::InitCounterInfo( GPUData* const gpuData, int adapterIndex /* = -1
 	if( gpuData->counterAvalibility )
 	{
 		IntelDeviceInfo info = { 0 };
-		int deviceInfoReturnCode = GetIntelDeviceInfo( &info, pAdapter );
+		int deviceInfoReturnCode = GetIntelDeviceInfo( &info, device );
 		if( deviceInfoReturnCode != EXIT_SUCCESS )
 		{
-			pAdapter->Release();
 			return deviceInfoReturnCode;
 		}
 		else
@@ -163,7 +249,6 @@ int GPUDetect::InitCounterInfo( GPUData* const gpuData, int adapterIndex /* = -1
 		}
 	}
 
-	pAdapter->Release();
 	return EXIT_SUCCESS;
 }
 
@@ -333,7 +418,7 @@ int GPUDetect::InitDxDriverVersion( GPUData * const gpuData )
 	for( unsigned int i = 0; i < numOfAdapters; ++i )
 	{
 		DWORD subKeyLength = subKeyMaxLength;
-		LONG returnCodeVendorID, returnCodeDeviceID;
+		LONG returnCodeLuid;
 		LSTATUS returnStatus = RegEnumKeyExA(
 			dxKeyHandle,
 			i,
@@ -347,33 +432,21 @@ int GPUDetect::InitDxDriverVersion( GPUData * const gpuData )
 
 		if( returnStatus == ERROR_SUCCESS )
 		{
-			DWORD vendorID;
-			DWORD deviceID;
-			DWORD dwordSize = sizeof( DWORD );
+			LUID adapterLUID;
 			DWORD qwordSize = sizeof( uint64_t );
 
-			returnCodeVendorID = RegGetValueA(
+			returnCodeLuid = RegGetValueA(
 				dxKeyHandle,
 				subKeyName,
-				"VendorId",
-				RRF_RT_DWORD,
+				"AdapterLuid",
+				RRF_RT_QWORD,
 				NULL,
-				&vendorID,
-				&dwordSize
+				&adapterLUID,
+				&qwordSize
 			);
 
-			returnCodeDeviceID = RegGetValueA(
-				dxKeyHandle,
-				subKeyName,
-				"DeviceId",
-				RRF_RT_DWORD,
-				NULL,
-				&deviceID,
-				&dwordSize
-			);
-
-			if( returnCodeDeviceID == ERROR_SUCCESS && returnCodeVendorID == ERROR_SUCCESS // If we were able to retrieve the registry values
-				&& vendorID == gpuData->vendorID && deviceID == gpuData->deviceID ) // and if the vendor ID and device ID match
+			if( returnCodeLuid == ERROR_SUCCESS // If we were able to retrieve the registry values
+				&& adapterLUID.HighPart == gpuData->adapterLUID.HighPart && adapterLUID.LowPart == gpuData->adapterLUID.LowPart ) // and if the vendor ID and device ID match
 			{
 				// We have our registry key! Let's get the driver version num now
 				foundSubkey = true;
@@ -405,84 +478,13 @@ int GPUDetect::InitDxDriverVersion( GPUData * const gpuData )
 	gpuData->dxDriverVersion[ 2 ] = (unsigned int) ( ( driverVersionRaw & 0x00000000FFFF0000 ) >> 16 * 1 );
 	gpuData->dxDriverVersion[ 3 ] = (unsigned int) ( ( driverVersionRaw & 0x000000000000FFFF ) );
 
-	// Further processing for Intel's driver versions
-	if( gpuData->vendorID == INTEL_VENDOR_ID )
-	{
-		// Determine which driver version format is being used
-		gpuData->intelDriverInfo.isNewDriverVersionFormat = gpuData->dxDriverVersion[ 2 ] >= 100;
-
-		if( gpuData->intelDriverInfo.isNewDriverVersionFormat )
-		{
-			gpuData->intelDriverInfo.osVersionID = gpuData->dxDriverVersion[ 0 ];
-			gpuData->intelDriverInfo.directXVersionID = gpuData->dxDriverVersion[ 1 ];
-			gpuData->intelDriverInfo.driverBuildNumber = gpuData->dxDriverVersion[ 2 ] * 10000 + gpuData->dxDriverVersion[ 3 ];
-		}
-		else
-		{
-			gpuData->intelDriverInfo.driverBaselineNumber = gpuData->dxDriverVersion[ 0 ] * 100 + gpuData->dxDriverVersion[ 1 ];
-			gpuData->intelDriverInfo.driverReleaseRevision = gpuData->dxDriverVersion[ 2 ];
-			gpuData->intelDriverInfo.driverBuildNumber = gpuData->dxDriverVersion[ 3 ];
-		}
-	}
+	gpuData->driverInfo.osVersionID = gpuData->dxDriverVersion[0];
+	gpuData->driverInfo.directXVersionID = gpuData->dxDriverVersion[1];
+	gpuData->driverInfo.driverReleaseRevision = gpuData->dxDriverVersion[2];
+	gpuData->driverInfo.driverBuildNumber = gpuData->dxDriverVersion[3];
 	
 	gpuData->d3dRegistryDataAvalibility = true;
 	return EXIT_SUCCESS;
-}
-
-int GPUDetect::CmpDriverVersions( const GPUData * const driverA, const GPUData * const driverB )
-{
-	if( driverA->intelDriverInfo.isNewDriverVersionFormat != driverB->intelDriverInfo.isNewDriverVersionFormat )
-	{
-		if( driverA->intelDriverInfo.isNewDriverVersionFormat )
-		{
-			return 1;
-		}
-		else
-		{
-			return -1;
-		}
-	}
-	else
-	{
-		// Compare OS / Baseline
-		if( driverA->intelDriverInfo.isNewDriverVersionFormat )
-		{
-			int osDiff = driverA->intelDriverInfo.osVersionID - driverB->intelDriverInfo.osVersionID;
-			if( osDiff != 0 )
-			{
-				return osDiff;
-			}
-		}
-		else
-		{
-			int baselineDiff = driverA->intelDriverInfo.driverBaselineNumber - driverB->intelDriverInfo.driverBaselineNumber;
-			if( baselineDiff != 0 )
-			{
-				return baselineDiff;
-			}
-		}
-
-		// Compare DirectXVersion / Release Version
-		if( driverA->intelDriverInfo.isNewDriverVersionFormat )
-		{
-			int dxDiff = driverA->intelDriverInfo.directXVersionID - driverB->intelDriverInfo.directXVersionID;
-			if( dxDiff != 0 )
-			{
-				return dxDiff;
-			}
-		}
-		else
-		{
-			int releaseDiff = driverA->intelDriverInfo.driverReleaseRevision - driverB->intelDriverInfo.driverReleaseRevision;
-			if( releaseDiff != 0 )
-			{
-				return releaseDiff;
-			}
-		}
-
-		// Compare build numbers (This is the same for both formats)
-		return driverA->intelDriverInfo.driverBuildNumber - driverB->intelDriverInfo.driverBuildNumber;
-	}
 }
 
 void GPUDetect::GetDriverVersionAsCString( const GPUData * const gpuData, char * const outString )
@@ -492,22 +494,22 @@ void GPUDetect::GetDriverVersionAsCString( const GPUData * const gpuData, char *
 
 float GPUDetect::GetWDDMVersion( const GPUData * const gpuData )
 {
-	if( !gpuData->d3dRegistryDataAvalibility || gpuData->vendorID != INTEL_VENDOR_ID )
+	if( !gpuData->d3dRegistryDataAvalibility )
 	{
 		return -1.0f;
 	}
 
-	switch( gpuData->intelDriverInfo.osVersionID )
+	switch( gpuData->driverInfo.osVersionID )
 	{
 	// Most of the time, just shift the decimal to the left
 	default:
-		return (float)gpuData->intelDriverInfo.osVersionID / 10;
+		return (float)gpuData->driverInfo.osVersionID / 10;
 
-	// Versions that can't be derived with shifting the decimal
-	case 10: return 1.3f;
-	case 9:  return 1.2f;
-	case 8:  return 1.1f;
-	case 7:  return 1.0f;
+	// Versions that can't be derived by shifting the decimal
+	case OSVersion::WIN_VISTA: return 1.0f;
+	case OSVersion::WIN_7:     return 1.1f;
+	case OSVersion::WIN_8:     return 1.2f;
+	case OSVersion::WIN_8_1:   return 1.3f;
 
 	// OS IDs that come before WDDM
 	case 6:
@@ -519,41 +521,36 @@ float GPUDetect::GetWDDMVersion( const GPUData * const gpuData )
 
 float GPUDetect::GetDirectXVersion( const GPUData * const gpuData )
 {
-	if( !gpuData->d3dRegistryDataAvalibility || gpuData->vendorID != INTEL_VENDOR_ID )
+	if( !gpuData->d3dRegistryDataAvalibility )
 	{
 		return -1.0f;
 	}
 
-	switch( gpuData->intelDriverInfo.directXVersionID )
+	switch( gpuData->driverInfo.directXVersionID )
 	{
-	case 20: return 12.1f;
-	case 19: return 12.0f;
-	case 18: return 11.1f;
-	case 17: return 11.0f;
-	case 15: return 10.f; // 10.x
-	case 14: return 9.f;  //  9.x
-	case 13: return 8.f;  //  8.x
-	case 12: return 7.f;  //  7.x
-	case 11: return 6.f;  //  6.x
+	case DXVersion::DX_12_1: return 12.1f;
+	case DXVersion::DX_12_0: return 12.0f;
+	case DXVersion::DX_11_1: return 11.1f;
+	case DXVersion::DX_11_0: return 11.0f;
+	case DXVersion::DX_10_X: return 10.f;
+	case DXVersion::DX_9_X:  return 9.f;
+	case DXVersion::DX_8_X:  return 8.f;
+	case DXVersion::DX_7_X:  return 7.f;
+	case DXVersion::DX_6_X:  return 6.f;
 
 	default: return -1.0;
 	}
 }
 
-int GPUDetect::InitAdapter( struct GPUData* const gpuData, IDXGIAdapter** pAdapter, int adapterIndex )
+int GPUDetect::InitAdapter( IDXGIAdapter** adapter, int adapterIndex )
 {
 #ifdef GPUDETECT_CHECK_PRECONDITIONS
 	// Check preconditions
-	if( !( gpuData->adapterIndex >= -1 ) )
+	if( !( adapterIndex >= 0 ) )
 	{
 		return GPUDETECT_ERROR_BAD_DATA;
 	}
 #endif
-
-	if( adapterIndex != -1 )
-	{
-		gpuData->adapterIndex = adapterIndex;
-	}
 
 	//
 	// We are relying on DXGI (supported on Windows Vista and later) to query
@@ -592,7 +589,7 @@ int GPUDetect::InitAdapter( struct GPUData* const gpuData, IDXGIAdapter** pAdapt
 		return GPUDETECT_ERROR_DXGI_FACTORY_CREATION;
 	}
 
-	if( FAILED( pFactory->EnumAdapters( gpuData->adapterIndex, (IDXGIAdapter**) pAdapter ) ) )
+	if( FAILED( pFactory->EnumAdapters( adapterIndex, (IDXGIAdapter**) adapter ) ) )
 	{
 		pFactory->Release();
 		FreeLibrary( hDXGI );
@@ -604,28 +601,34 @@ int GPUDetect::InitAdapter( struct GPUData* const gpuData, IDXGIAdapter** pAdapt
 	return EXIT_SUCCESS;
 }
 
-int GPUDetect::GetIntelDeviceInfo(IntelDeviceInfo* deviceInfo, IDXGIAdapter* pAdapter )
+int GPUDetect::InitDevice( IDXGIAdapter * adapter, ID3D11Device ** device )
 {
-	//
-	// First create the Device, must be SandyBridge or later to create D3D11
-	// device.
-	//
-	ID3D11Device* pDevice = nullptr;
-	ID3D11DeviceContext* pDeviceContext = nullptr;
-	if( FAILED( D3D11CreateDevice( pAdapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &pDevice, NULL, &pDeviceContext ) ) )
+	if( SUCCEEDED( D3D11CreateDevice( adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, 0, NULL, 0, D3D11_SDK_VERSION, device, NULL, NULL ) ) )
+	{
+		return EXIT_SUCCESS;
+	}
+	else
 	{
 		return GPUDETECT_ERROR_DXGI_DEVICE_CREATION;
 	}
+}
+
+int GPUDetect::GetIntelDeviceInfo(IntelDeviceInfo* deviceInfo, ID3D11Device* device )
+{
+	//
+	// Grab the device context from the device.
+	//
+	ID3D11DeviceContext* deviceContext = nullptr;
+	device->GetImmediateContext( &deviceContext );
 
 	//
 	// Query the device to find the number of device dependent counters.
 	//
 	D3D11_COUNTER_INFO counterInfo = {};
-	pDevice->CheckCounterInfo( &counterInfo );
+	device->CheckCounterInfo( &counterInfo );
 	if( counterInfo.LastDeviceDependentCounter == 0 )
 	{
-		pDevice->Release();
-		pDeviceContext->Release();
+		deviceContext->Release();
 		return GPUDETECT_ERROR_DXGI_BAD_COUNTER;
 	}
 
@@ -646,7 +649,7 @@ int GPUDetect::GetIntelDeviceInfo(IntelDeviceInfo* deviceInfo, IDXGIAdapter* pAd
 		UINT uiNameLength = 0;
 		UINT uiUnitsLength = 0;
 		UINT uiDescLength = 0;
-		if( FAILED( pDevice->CheckCounter( &counterDesc, &counterType, &uiSlotsRequired, NULL, &uiNameLength, NULL, &uiUnitsLength, NULL, &uiDescLength ) ) )
+		if( FAILED( device->CheckCounter( &counterDesc, &counterType, &uiSlotsRequired, NULL, &uiNameLength, NULL, &uiUnitsLength, NULL, &uiDescLength ) ) )
 		{
 			continue;
 		}
@@ -656,7 +659,7 @@ int GPUDetect::GetIntelDeviceInfo(IntelDeviceInfo* deviceInfo, IDXGIAdapter* pAd
 		LPSTR sDesc = new char[ uiDescLength ];
 
 		intelDeviceInfo =
-			SUCCEEDED( pDevice->CheckCounter( &counterDesc, &counterType, &uiSlotsRequired, sName, &uiNameLength, sUnits, &uiUnitsLength, sDesc, &uiDescLength ) ) &&
+			SUCCEEDED( device->CheckCounter( &counterDesc, &counterType, &uiSlotsRequired, sName, &uiNameLength, sUnits, &uiUnitsLength, sDesc, &uiDescLength ) ) &&
 			strcmp( sName, "Intel Device Information" ) == 0;
 
 		if( intelDeviceInfo )
@@ -679,22 +682,20 @@ int GPUDetect::GetIntelDeviceInfo(IntelDeviceInfo* deviceInfo, IDXGIAdapter* pAd
 	// returns a pointer to the data, not the actual data.
 	//
 	ID3D11Counter* counter = NULL;
-	if( !intelDeviceInfo || FAILED( pDevice->CreateCounter( &counterDesc, &counter ) ) )
+	if( !intelDeviceInfo || FAILED( device->CreateCounter( &counterDesc, &counter ) ) )
 	{
-		pDevice->Release();
-		pDeviceContext->Release();
+		deviceContext->Release();
 		return GPUDETECT_ERROR_DXGI_COUNTER_CREATION;
 	}
 
-	pDeviceContext->Begin( counter );
-	pDeviceContext->End( counter );
+	deviceContext->Begin( counter );
+	deviceContext->End( counter );
 
 	unsigned __int64 dataAddress = 0;
-	if( pDeviceContext->GetData( counter, &dataAddress, sizeof( dataAddress ), 0 ) != S_OK )
+	if( deviceContext->GetData( counter, &dataAddress, sizeof( dataAddress ), 0 ) != S_OK )
 	{
 		counter->Release();
-		pDevice->Release();
-		pDeviceContext->Release();
+		deviceContext->Release();
 		return GPUDETECT_ERROR_DXGI_COUNTER_GET_DATA;
 	}
 
@@ -705,7 +706,6 @@ int GPUDetect::GetIntelDeviceInfo(IntelDeviceInfo* deviceInfo, IDXGIAdapter* pAd
 	memcpy( deviceInfo, (void*) dataAddress, infoSize );
 
 	counter->Release();
-	pDevice->Release();
-	pDeviceContext->Release();
+	deviceContext->Release();
 	return EXIT_SUCCESS;
 }

@@ -133,9 +133,27 @@ int main( int argc, char** argv )
 		return 1;
 	}
 
-
 	struct GPUDetect::GPUData gpuData = { 0 };
-	int initReturnCode = GPUDetect::InitExtensionInfo( &gpuData, adapterIndex );
+	IDXGIAdapter* adapter = nullptr;
+	int initReturnCode = GPUDetect::InitAdapter( &adapter, 0 );
+	if( initReturnCode != EXIT_SUCCESS )
+	{
+		printError( initReturnCode );
+
+		return EXIT_FAILURE;
+	};
+
+	ID3D11Device* device = nullptr;
+	initReturnCode = GPUDetect::InitDevice( adapter, &device );
+	if( initReturnCode != EXIT_SUCCESS )
+	{
+		printError( initReturnCode );
+
+		adapter->Release();
+		return EXIT_FAILURE;
+	};
+
+	initReturnCode = GPUDetect::InitExtensionInfo( &gpuData, adapter, device );
 	if( initReturnCode != EXIT_SUCCESS )
 	{
 		printError( initReturnCode );
@@ -164,23 +182,11 @@ int main( int argc, char** argv )
 			GPUDetect::GetDriverVersionAsCString( &gpuData, driverVersion );
 			printf( "Driver Version: %s\n", driverVersion );
 
-			// Print out additional data
-			if( gpuData.vendorID == GPUDetect::INTEL_VENDOR_ID )
-			{
-				
-				if( gpuData.intelDriverInfo.isNewDriverVersionFormat )
-				{
-					printf( "WDDM Version: %1.1f\n", GPUDetect::GetWDDMVersion( &gpuData ) );
-					printf( "DirectX Version: %1.1f\n", GPUDetect::GetDirectXVersion( &gpuData ) );
-					printf( "Build Number: %3i.%4i\n", gpuData.intelDriverInfo.driverBuildNumber / 10000, gpuData.intelDriverInfo.driverBuildNumber % 10000 );
-				}
-				else
-				{
-					printf( "Version Baseline: %2i.%2i\n", gpuData.intelDriverInfo.driverBaselineNumber / 100, gpuData.intelDriverInfo.driverBaselineNumber % 100 );
-					printf( "Release Revision: %i\n", gpuData.intelDriverInfo.driverReleaseRevision );
-					printf( "Build Number: %i\n", gpuData.intelDriverInfo.driverBuildNumber );
-				}
-			}
+			// Print out decoded data
+			printf("WDDM Version: %1.1f\n", GPUDetect::GetWDDMVersion(&gpuData));
+			printf("DirectX Version: %1.1f\n", GPUDetect::GetDirectXVersion(&gpuData));
+			printf("Release Revision: %i\n", gpuData.driverInfo.driverReleaseRevision);
+			printf("Build Number: %i\n", gpuData.driverInfo.driverBuildNumber);
 
 			printf( "\n" );
 		}
@@ -243,8 +249,8 @@ int main( int argc, char** argv )
 		{
 			GPUDetect::INTEL_GPU_ARCHITECTURE arch = GPUDetect::getIntelGPUArchitecture( gpuData.deviceID );
 
-			// Populate the GPU architecture data with info from the counter, otherwise gpuDetector will use the value we got from the Dx11 extension
-			initReturnCode = GPUDetect::InitCounterInfo( &gpuData, adapterIndex );
+			// Populate the GPU architecture data with info from the counter, otherwise gpuDetect will use the value we got from the Dx11 extension
+			initReturnCode = GPUDetect::InitCounterInfo( &gpuData, device );
 
 			if( initReturnCode != EXIT_SUCCESS )
 			{
@@ -273,6 +279,9 @@ int main( int argc, char** argv )
 
 		printf( "\n" );
 	}
+
+	adapter->Release();
+	device->Release();
 
 	printf( "\n" );
 	printf( "Press any key to exit...\n" );

@@ -81,7 +81,7 @@ GPUDetect::INTEL_GPU_ARCHITECTURE GPUDetect::getIntelGPUArchitecture( unsigned i
 		return IGFX_BROADWELL;
 	}
 
-	if( idhi == 0x1900 )
+	if( idhi == 0x1900 || idhi == 0x0900)
 	{
 		return IGFX_SKYLAKE;
 	}
@@ -107,9 +107,14 @@ GPUDetect::INTEL_GPU_ARCHITECTURE GPUDetect::getIntelGPUArchitecture( unsigned i
 		return IGFX_COFFEELAKE;
 	}
 
-	if( idhi == 0x8A00 )
+	if( idhi == 0xFF00 )
 	{
 		return IGFX_ICELAKE;
+	}
+
+	if (idhi == 0x3400 || idhi == 0x8A00)
+	{
+		return IGFX_ICELAKE_LP;
 	}
 
 	return IGFX_UNKNOWN;
