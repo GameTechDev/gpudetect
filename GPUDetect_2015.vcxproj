@@ -175,6 +175,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="DeviceId.h" />
+    <ClInclude Include="GPUDetect.h" />
     <ClInclude Include="ID3D10Extensions.h" />
   </ItemGroup>
   <ItemGroup>
@@ -186,6 +187,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DeviceId.cpp" />
+    <ClCompile Include="GPUDetect.cpp" />
     <ClCompile Include="TestMain.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
