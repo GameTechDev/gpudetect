@@ -60,23 +60,23 @@ char const* GPUDetect::getIntelGPUArchitectureString( INTEL_GPU_ARCHITECTURE arc
 GPUDetect::INTEL_GPU_ARCHITECTURE GPUDetect::getIntelGPUArchitecture( unsigned int deviceId )
 {
 	unsigned int idhi = deviceId & 0xFF00;
-	unsigned int idlo = deviceId & 0x00F0;
+	unsigned int idlo = deviceId & 0x00FF;
 
 	if( idhi == 0x0100 )
 	{
-		if( idlo == 0x0050 || idlo == 0x0060 )
+		if( idlo == 0x0050 || idlo == 0x0060 )// TODO: Check these low values
 		{
 			return IGFX_IVYBRIDGE;
 		}
 		return IGFX_SANDYBRIDGE;
 	}
 
-	if( idhi == 0x0400 || idhi == 0x0A00 || idhi == 0x0D00 )
+	if( idhi == 0x0400 || idhi == 0x0A00 || idhi == 0x0D00 || idhi == 0x0C00)
 	{
 		return IGFX_HASWELL;
 	}
 
-	if( idhi == 0x1600 )
+	if( idhi == 0x1600 || idhi == 0x0B00 )
 	{
 		return IGFX_BROADWELL;
 	}
@@ -96,6 +96,11 @@ GPUDetect::INTEL_GPU_ARCHITECTURE GPUDetect::getIntelGPUArchitecture( unsigned i
 		return IGFX_GEMINILAKE;;
 	}
 
+	if( idhi == 0x5A00 || idhi == 0x0A00 )
+	{
+		return IGFX_CANNONLAKE;;
+	}
+
 	if( idhi == 0x3E00 )
 	{
 		
@@ -107,12 +112,7 @@ GPUDetect::INTEL_GPU_ARCHITECTURE GPUDetect::getIntelGPUArchitecture( unsigned i
 		return IGFX_COFFEELAKE;
 	}
 
-	if( idhi == 0xFF00 )
-	{
-		return IGFX_ICELAKE;
-	}
-
-	if (idhi == 0x3400 || idhi == 0x8A00)
+	if ( idhi == 0x8A00 )
 	{
 		return IGFX_ICELAKE_LP;
 	}
