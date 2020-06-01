@@ -14,13 +14,9 @@
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-//
-// DeviceId.h
-//
+
 #pragma once
 
-#include <dxgi.h>
-#include <string>
 
 namespace GPUDetect
 {
@@ -45,6 +41,7 @@ namespace GPUDetect
 		IGFX_LAKEFIELD,
 
 		IGFX_MAX_PRODUCT,
+
 		// Architectures with no enum value
 		IGFX_WHISKEYLAKE
 	};
@@ -60,7 +57,7 @@ namespace GPUDetect
 	 *      example, a newer architecture may have an lower deviceID.
 	 *
 	 ******************************************************************************/
-	INTEL_GPU_ARCHITECTURE getIntelGPUArchitecture( unsigned int deviceId );
+	INTEL_GPU_ARCHITECTURE GetIntelGPUArchitecture( unsigned int deviceId );
 
 	/*******************************************************************************
 	 * getIntelGPUArchitectureString
@@ -68,8 +65,5 @@ namespace GPUDetect
 	 *     Convert A INTEL_GPU_ARCHITECTURE to a string.
 	 *
 	 ******************************************************************************/
-	char const* getIntelGPUArchitectureString( INTEL_GPU_ARCHITECTURE arch );
+	char const* GetIntelGPUArchitectureString( INTEL_GPU_ARCHITECTURE arch );
 }
-
-
-

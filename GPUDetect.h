@@ -1,13 +1,39 @@
+////////////////////////////////////////////////////////////////////////////////
+// Copyright 2017-2020 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+////////////////////////////////////////////////////////////////////////////////
+
+
 #pragma once
 
+
+#include <windows.h>
+#include <stdint.h>
+
 #include "DeviceId.h"
-#include "ID3D10Extensions.h"
+
+
+// forward decls
+struct IDXGIAdapter;
+struct ID3D11Device;
+
 
 // Error return codes for GPUDetect
 // These codes are set up so that (ERROR_CODE % GENERAL_ERROR_CODE) == 0 if
 // ERROR_CODE is a subset of GENERAL_ERROR_CODE.
 // e.g. GPUDETECT_ERROR_DXGI_LOAD % GPUDETECT_ERROR_DXGI_LOAD == 0
-#define GPUDETECT_ERROR_GENERIC 1
+#define GPUDETECT_ERROR_GENERIC                 1
 
 /// General DXGI Errors
 #define GPUDETECT_ERROR_GENERAL_DXGI            2
@@ -25,12 +51,14 @@
 
 /// Windows Registry Errors
 #define GPUDETECT_ERROR_REG_GENERAL_FAILURE     31
-#define GPUDETECT_ERROR_REG_NO_D3D_KEY          GPUDETECT_ERROR_REG_GENERAL_FAILURE * 37 // A directX key was not found in the registry in the expected location
+#define GPUDETECT_ERROR_REG_NO_D3D_KEY          GPUDETECT_ERROR_REG_GENERAL_FAILURE * 37 // A DirectX key was not found in the registry in the expected location
 #define GPUDETECT_ERROR_REG_MISSING_DRIVER_INFO GPUDETECT_ERROR_REG_GENERAL_FAILURE * 41 // Driver info is missing from the registry
 
 /// Precondition Errors
-#define GPUDETECT_CHECK_PRECONDITIONS // Comment this out to remove precondition checks
 #define GPUDETECT_ERROR_BAD_DATA                47
+
+#define GPUDETECT_ERROR_NOT_SUPPORTED           55
+
 
 namespace GPUDetect
 {
@@ -47,7 +75,7 @@ namespace GPUDetect
 		Medium,
 		MediumPlus,
 		High,
-		Undefined  // No predefined setting found in cfg file. 
+		Undefined  // No predefined setting found in cfg file.
 				   // Use a default level for unknown video cards.
 	};
 
@@ -70,7 +98,7 @@ namespace GPUDetect
 		WIN_10_OCTOBER_2018, // Windows 10 October 2018 Update
 		WIN_10_MAY_2019 // Windows 10 May 2019 Update
 	};
-	
+
 	// The definitions for DX versions in the driver number
 	enum DXVersion
 	{
@@ -85,22 +113,28 @@ namespace GPUDetect
 		DX_12_1
 	};
 
+	// An enum that identifies the generation of Graphics
+	enum IntelGraphicsGeneration
+	{
+		INTEL_GFX_GEN_UNKNOWN = 0,
+		INTEL_GFX_GEN6,
+		INTEL_GFX_GEN7,
+		INTEL_GFX_GEN7_5, // 7.5
+		INTEL_GFX_GEN8,
+		INTEL_GFX_GEN9,
+		INTEL_GFX_GEN9_5, // 9.5
+		INTEL_GFX_GEN10,
+		INTEL_GFX_GEN11
+	};
+
 	struct GPUData
 	{
-		/*******************************************************************************
-		 * adapterIndex
-		 *
-		 *     The index of the DirectX adapter to gather information from.
-		 *
-		 ******************************************************************************/
-		int adapterIndex;
-
 		/////////////////////////
-		// Dx11 Extension Data //
+		// DX11 Extension Data //
 		/////////////////////////
 
 		/*******************************************************************************
-		 * dxAdapterAvalibility
+		 * dxAdapterAvailability
 		 *
 		 *     Is true if Intel driver extension data is populated.
 		 *     If this value is false, all other extension data will be null.
@@ -108,14 +142,14 @@ namespace GPUDetect
 		 *     This value is initialized by the InitExtensionInfo function.
 		 *
 		 ******************************************************************************/
-		bool dxAdapterAvalibility;
+		bool dxAdapterAvailability;
 
 		/*******************************************************************************
 		 * vendorID
 		 *
 		 *     The vendorID of the GPU.
 		 *
-		 *     This value is initialized by the InitExtensionInfo function. 
+		 *     This value is initialized by the InitExtensionInfo function.
 		 *
 		 ******************************************************************************/
 		unsigned int vendorID;
@@ -146,7 +180,7 @@ namespace GPUDetect
 		 *     Is true if the GPU uses a uniform memory access architecture.
 		 *     On GPUs with a Unified Memory Architecture (UMA) like Intel integrated
 		 *     GPUs, the CPU system memory is also used for graphics and there is no
-		 *     dedicated VRAM.  Any memory reported as “dedicated” is really a small
+		 *     dedicated VRAM.  Any memory reported as "dedicated" is really a small
 		 *     pool of system memory reserved by the BIOS for internal use. All normal
 		 *     application allocations (buffers, textures, etc.) are allocated from
 		 *     general system "shared" memory.  For this reason, do not use the
@@ -166,7 +200,7 @@ namespace GPUDetect
 		 *     This value is initialized by the InitExtensionInfo function.
 		 *
 		 ******************************************************************************/
-		unsigned __int64 videoMemory;
+		uint64_t videoMemory;
 
 		/*******************************************************************************
 		 * description
@@ -176,34 +210,34 @@ namespace GPUDetect
 		 *     This value is initialized by the InitExtensionInfo function.
 		 *
 		 ******************************************************************************/
-		WCHAR description[ 128 ];
+		WCHAR description[ _countof( DXGI_ADAPTER_DESC::Description ) ];
 
 		/*******************************************************************************
-		 * extentionVersion
+		 * extensionVersion
 		 *
 		 *     Version number for D3D driver extensions.
 		 *
 		 *     This value is initialized by the InitExtensionInfo function.
 		 *
 		 ******************************************************************************/
-		unsigned int extentionVersion;
+		unsigned int extensionVersion;
 
 		/*******************************************************************************
-		 * intelExtentionAvalibility
+		 * intelExtensionAvailability
 		 *
 		 *     True if Intel driver extensions are available on the GPU.
 		 *
 		 *     This value is initialized by the InitExtensionInfo function.
 		 *
 		 ******************************************************************************/
-		bool intelExtentionAvalibility;
+		bool intelExtensionAvailability;
 
 		/////////////////////////////////
-		// Dx11 Hardware Counters Data //
+		// DX11 Hardware Counters Data //
 		/////////////////////////////////
 
 		/*******************************************************************************
-		 * counterAvalibility
+		 * counterAvailability
 		 *
 		 *     Returns true if Intel driver extensions are available to gather data from.
 		 *     If this value is false, all other extension data will be null.
@@ -211,7 +245,7 @@ namespace GPUDetect
 		 *     This value is initialized by the InitCounterInfo function.
 		 *
 		 ******************************************************************************/
-		bool counterAvalibility;
+		bool counterAvailability;
 
 		/*******************************************************************************
 		 * maxFrequency
@@ -236,7 +270,7 @@ namespace GPUDetect
 		/// Advanced counter info
 
 		/*******************************************************************************
-		 * advancedCounterDataAvalibility
+		 * advancedCounterDataAvailability
 		 *
 		 *     Returns true if advanced counter data is available from this GPU.
 		 *     Older Intel products only provide the maximum and minimum GPU frequency
@@ -245,18 +279,18 @@ namespace GPUDetect
 		 *     This value is initialized by the InitCounterInfo function.
 		 *
 		 ******************************************************************************/
-		bool advancedCounterDataAvalibility;
+		bool advancedCounterDataAvailability;
 
 		/*******************************************************************************
 		 * architectureCounter
 		 *
 		 *     A counter that indicates which architecture the GPU uses.
 		 *
-		 *     This value is initialized by the InitCounterInfo function or the 
+		 *     This value is initialized by the InitCounterInfo function or the
 		 *     InitExtensionInfo function.
 		 *
 		 ******************************************************************************/
-		enum INTEL_GPU_ARCHITECTURE architectureCounter;
+		INTEL_GPU_ARCHITECTURE architectureCounter;
 
 		/*******************************************************************************
 		 * euCount
@@ -304,17 +338,17 @@ namespace GPUDetect
 		unsigned int dxDriverVersion[ 4 ];
 
 		/*******************************************************************************
-		 * d3dRegistryDataAvalibility
+		 * d3dRegistryDataAvailability
 		 *
-		 *     Is true if d3d registry data is populated. If this value is true and 
+		 *     Is true if d3d registry data is populated. If this value is true and
 		 *     vendorID == INTEL_VENDOR_ID, then the intelDriverInfo fields will be
-		 *     populated. If this value is false, all other registry data data will be 
+		 *     populated. If this value is false, all other registry data data will be
 		 *     null.
 		 *
 		 *     This value is initialized by the InitDxDriverVersion function.
 		 *
 		 ******************************************************************************/
-		bool d3dRegistryDataAvalibility;
+		bool d3dRegistryDataAvailability;
 
 		struct DriverVersionInfo
 		{
@@ -334,10 +368,10 @@ namespace GPUDetect
 			/*******************************************************************************
 			 * directXVersionID
 			 *
-			 *     The directX version ID for this device's driver. This is the second
+			 *     The DX version ID for this device's driver. This is the second
 			 *     section of the driver version number as illustrated by the 'X's below:
 			 *     00.XX.000.0000
-			 *     This can then be translated to a DirectX version number using
+			 *     This can then be translated to a DX version number using
 			 *     GetDirectXVersion().
 			 *
 			 *     This value is initialized by the InitDxDriverVersion function.
@@ -384,11 +418,10 @@ namespace GPUDetect
 	 *         The struct in which the information will be stored.
 	 *
 	 *     adapterIndex
-	 *         The index of the adapter to get the information from. If adapterIndex
-	 *         is -1, the adapterIndex value from gpuData will be used.
+	 *         The index of the adapter to get the information from.
 	 *
 	 ******************************************************************************/
-	int InitAll( struct GPUData* const gpuData, int adapterIndex = -1 );
+	int InitAll( GPUData* const gpuData, int adapterIndex );
 
 	/*******************************************************************************
 	 * InitAll
@@ -406,28 +439,27 @@ namespace GPUDetect
 	 *         A pointer to the device to draw info from.
 	 *
 	 ******************************************************************************/
-	int InitAll( struct GPUData* const gpuData, IDXGIAdapter* adapter, ID3D11Device* device );
+	int InitAll( GPUData* const gpuData, IDXGIAdapter* adapter, ID3D11Device* device );
 
 	/*******************************************************************************
 	 * InitExtensionInfo
 	 *
-	 *     Loads available info from the Dx11 extension interface. Returns 
+	 *     Loads available info from the DX11 extension interface. Returns
 	 *     EXIT_SUCCESS if no error was encountered, otherwise returns an error code.
 	 *
 	 *     gpuData
 	 *         The struct in which the information will be stored.
 	 *
 	 *     adapterIndex
-	 *         The index of the adapter to get the information from. If adapterIndex
-	 *         is -1, the adapterIndex value from gpuData will be used.
+	 *         The index of the adapter to get the information from.
 	 *
 	 ******************************************************************************/
-	int InitExtensionInfo( struct GPUData* const gpuData, int adapterIndex = -1 );
+	int InitExtensionInfo( GPUData* const gpuData, int adapterIndex );
 
 	/*******************************************************************************
 	 * InitExtensionInfo
 	 *
-	 *     Loads available info from the Dx11 extension interface. Returns
+	 *     Loads available info from the DX11 extension interface. Returns
 	 *     EXIT_SUCCESS if no error was encountered, otherwise returns an error code.
 	 *
 	 *     gpuData
@@ -440,31 +472,33 @@ namespace GPUDetect
 	 *         A pointer to the device to draw info from.
 	 *
 	 ******************************************************************************/
-	int InitExtensionInfo( struct GPUData* const gpuData, IDXGIAdapter* adapter, ID3D11Device* device );
+	int InitExtensionInfo( GPUData* const gpuData, IDXGIAdapter* adapter, ID3D11Device* device );
 
 	/*******************************************************************************
 	 * InitCounterInfo
 	 *
-	 *     Loads available info from Dx11 hardware counters. Returns EXIT_SUCCESS 
-	 *     if no error was encountered, otherwise returns an error code. Requires 
+	 *     Loads available info from DX11 hardware counters. Returns EXIT_SUCCESS
+	 *     if no error was encountered, otherwise returns an error code. Requires
 	 *     that InitExtensionInfo be run on gpuData before this is called.
 	 *
 	 *     gpuData
 	 *         The struct in which the information will be stored.
 	 *
 	 *     adapterIndex
-	 *         The index of the adapter to get the information from. If adapterIndex
-	 *         is -1, the adapterIndex value from gpuData will be used.
+	 *         The index of the adapter to get the information from.
 	 *
 	 ******************************************************************************/
-	int InitCounterInfo( struct GPUData* const gpuData, int adapterIndex = -1 );
+	int InitCounterInfo( GPUData* const gpuData, int adapterIndex );
 
 	/*******************************************************************************
 	 * InitCounterInfo
 	 *
-	 *     Loads available info from Dx11 hardware counters. Returns EXIT_SUCCESS
-	 *     if no error was encountered, otherwise returns an error code. Requires
-	 *     that InitExtensionInfo be run on gpuData before this is called.
+	 *     Intel exposes additional information through the DX driver
+	 *     that can be obtained querying a special counter. This loads the
+	 *     available info. It returns EXIT_SUCCESS if no error was encountered,
+	 *     otherwise returns an error code.
+	 *
+	 *      Requires that InitExtensionInfo be run on gpuData before this is called.
 	 *
 	 *     gpuData
 	 *         The struct in which the information will be stored.
@@ -473,7 +507,7 @@ namespace GPUDetect
 	 *         A pointer to the device to draw info from.
 	 *
 	 ******************************************************************************/
-	int InitCounterInfo( struct GPUData* const gpuData, ID3D11Device* device );
+	int InitCounterInfo( GPUData* const gpuData, ID3D11Device* device );
 
 	/*******************************************************************************
 	 * GetDefaultFidelityPreset
@@ -491,16 +525,16 @@ namespace GPUDetect
 	 *     detailing presets for other manufacturers.
 	 *
 	 *     gpuData
-	 *         The data for the GPU in question. 
+	 *         The data for the GPU in question.
 	 *
 	 ******************************************************************************/
-	PresetLevel GetDefaultFidelityPreset( const struct GPUData* const gpuData );
+	PresetLevel GetDefaultFidelityPreset( const GPUData* const gpuData );
 
 	/*******************************************************************************
 	 * InitDxDriverVersion
 	 *
-	 *     Loads the DirectX driver version for the given adapter from the windows 
-	 *     registry. Returns EXIT_SUCCESS if no error was encountered, otherwise 
+	 *     Loads the DX driver version for the given adapter from the windows
+	 *     registry. Returns EXIT_SUCCESS if no error was encountered, otherwise
 	 *     returns an error code. Requires that InitExtensionInfo be run on gpuData
 	 *     before this is called.
 	 *
@@ -508,7 +542,7 @@ namespace GPUDetect
 	 *         The struct in which the information will be stored.
 	 *
 	 ******************************************************************************/
-	int InitDxDriverVersion( struct GPUData* const gpuData );
+	int InitDxDriverVersion( GPUData* const gpuData );
 
 	/*******************************************************************************
 	 * GetDriverVersionAsCString
@@ -516,13 +550,16 @@ namespace GPUDetect
 	 *     Stores the driver version as a string in the 00.00.000.0000 format.
 	 *
 	 *     gpuData
-	 *         The b
+	 *         The struct that contains the driver version.
 	 *
-	 *     outString
-	 *         Where to store the resulting c string.
+	 *     outBuffer
+	 *         Buffer to store the resulting c string.
+	 *
+	 *     outBufferSize
+	 *         Size of buffer to store the resulting c string.
 	 *
 	 ******************************************************************************/
-	void GetDriverVersionAsCString( const struct GPUData* const gpuData, char* const outString );
+	void GetDriverVersionAsCString( const GPUData* const gpuData, char* const outBuffer, size_t outBufferSize );
 
 	/*******************************************************************************
 	 * GetWDDMVersion
@@ -534,19 +571,47 @@ namespace GPUDetect
 	 *         The struct that contains the driver version.
 	 *
 	 ******************************************************************************/
-	float GetWDDMVersion( const struct GPUData* const gpuData );
+	float GetWDDMVersion( const GPUData* const gpuData );
 
 	/*******************************************************************************
 	 * GetDirectXVersion
 	 *
-	 *     Returns the directX version number as derived from the driver version if
+	 *     Returns the DX version number as derived from the driver version if
 	 *     possible. Otherwise, returns -1.0f.
 	 *
 	 *     gpuData
 	 *         The struct that contains the driver version.
 	 *
 	 ******************************************************************************/
-	float GetDirectXVersion( const struct GPUData* const gpuData );
+	float GetDirectXVersion( const GPUData* const gpuData );
+
+	/*******************************************************************************
+	 * GetIntelGraphicsGeneration
+	 *
+	 *     Returns the generation of Intel(tm) Graphics, given the architecture.
+	 *
+	 *     architecture
+	 *         The architecture to identify.
+	 *
+	 ******************************************************************************/
+	IntelGraphicsGeneration GetIntelGraphicsGeneration( INTEL_GPU_ARCHITECTURE architecture );
+
+	/*******************************************************************************
+	 * GetIntelGraphicsGenerationAsCString
+	 *
+	 *     Returns the generation of Intel(tm) Graphics, given the architecture.
+	 *
+	 *     generation
+	 *         The generation to identify.
+	 *
+	 *     outBuffer
+	 *         Buffer to store the resulting c string.
+	 *
+	 *     outBufferSize
+	 *         Size of buffer to store the resulting c string. Must be > 7 bytes!
+	 *
+	 ******************************************************************************/
+	void GetIntelGraphicsGenerationAsCString( const IntelGraphicsGeneration genneration, char* const outBuffer, size_t outBufferSize  );
 
 	/*******************************************************************************
 	 * InitAdapter
@@ -554,14 +619,10 @@ namespace GPUDetect
 	 *     Initializes a adapter of the given index. Returns EXIT_SUCCESS if no
 	 *     error was encountered, otherwise returns an error code.
 	 *
-	 *     gpuData
-	 *         The gpuData struct to operate on. This is only needed if adapterIndex
-	 *         is not -1. Otherwise, can be passed as nullptr.
-	 *
 	 *     adapter
 	 *         The address of the pointer that this function will point to
 	 *         the created adapter.
-	 *         
+	 *
 	 *     adapterIndex
 	 *         If adapterIndex >= 0 this will be used as as the index of the
 	 *         adapter to create.
@@ -572,19 +633,17 @@ namespace GPUDetect
 	/*******************************************************************************
 	 * InitDevice
 	 *
-	 *     Initializes a dxDevice of the given index. Returns EXIT_SUCCESS if no
+	 *     Initializes a DX11 device of the given index. Returns EXIT_SUCCESS if no
 	 *     error was encountered, otherwise returns an error code.
 	 *
 	 *     adapter
-	 *         The adapter to create the dxDevice from.
+	 *         The adapter to create the device from.
 	 *
 	 *     device
 	 *         The address of the pointer that this function will point to the
-	 *         created dxDevice.
+	 *         created device.
 	 *
 	 ******************************************************************************/
 	int InitDevice( IDXGIAdapter* adapter, ID3D11Device** device );
 
 }
-
-

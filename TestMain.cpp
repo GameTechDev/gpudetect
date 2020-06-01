@@ -14,13 +14,20 @@
 // limitations under the License.
 ////////////////////////////////////////////////////////////////////////////////
 
-#include <conio.h>
+
+#include <dxgi.h>
 #include <d3d11.h>
-#include <intrin.h>
+#ifdef _WIN32_WINNT_WIN10
+#include <d3d11_3.h>
+#endif
+
+#include <assert.h>
+#include <stdlib.h>
 #include <stdio.h>
+#include <string>
 
 #include "GPUDetect.h"
-#include "ID3D10Extensions.h"
+
 
 // For parsing arguments
 bool isnumber( char* s )
@@ -48,8 +55,8 @@ void printError( int errorCode )
 	if( errorCode % GPUDETECT_ERROR_GENERAL_DXGI == 0 )
 	{
 		fprintf( stderr, "DXGI: " );
-	} 
-	
+	}
+
 	if( errorCode % GPUDETECT_ERROR_GENERAL_DXGI_COUNTER == 0 )
 	{
 		fprintf( stderr, "DXGI Counter: " );
@@ -95,7 +102,7 @@ void printError( int errorCode )
 		break;
 
 	case GPUDETECT_ERROR_REG_NO_D3D_KEY:
-		fprintf( stderr, "D3D Driver info was not located in the expected location in the registry\n" );
+		fprintf( stderr, "D3D driver info was not located in the expected location in the registry\n" );
 		break;
 
 	case GPUDETECT_ERROR_REG_MISSING_DRIVER_INFO:
@@ -103,7 +110,12 @@ void printError( int errorCode )
 		break;
 
 	case GPUDETECT_ERROR_BAD_DATA:
-		fprintf( stderr, "Precondition of function not met\n" );
+		fprintf( stderr, "Bad input data for function or precondition not met\n" );
+		break;
+
+	case GPUDETECT_ERROR_NOT_SUPPORTED:
+		fprintf( stderr, "Not supported\n" );
+		break;
 
 	default:
 		fprintf( stderr, "Unknown error\n" );
@@ -121,25 +133,35 @@ void printError( int errorCode )
  ******************************************************************************/
 int main( int argc, char** argv )
 {
+	printf("\n\n[ Intel GPUDetect ]\n");
+	printf("Build Info: %s, %s\n", __DATE__, __TIME__);
+
 	int adapterIndex = 0;
-	if( argc == 2 && isnumber( argv[ 1 ] ) )
+
+	if ( argc == 1 )
+	{
+		fprintf( stdout, "Usage: GPUDetect adapter_index\n" );
+		fprintf( stdout, "Defaulting to adapter_index = %d\n", adapterIndex );
+	}
+	else if( argc == 2 && isnumber( argv[ 1 ] ))
 	{
 		adapterIndex = atoi( argv[ 1 ] );
+		fprintf( stdout, "Choosing adapter_index = %d\n", adapterIndex );
 	}
-	else if( argc != 1 )
+	else
 	{
-		fprintf( stderr, "error: unexpected arguments.\n" );
-		fprintf( stderr, "usage: GPUDetect adapter_index\n" );
-		return 1;
+		fprintf( stdout, "Usage: GPUDetect adapter_index\n" );
+		fprintf( stderr, "Error: unexpected arguments.\n" );
+		return EXIT_FAILURE;
 	}
+	printf( "\n" );
 
-	struct GPUDetect::GPUData gpuData = { 0 };
+
 	IDXGIAdapter* adapter = nullptr;
-	int initReturnCode = GPUDetect::InitAdapter( &adapter, 0 );
+	int initReturnCode = GPUDetect::InitAdapter( &adapter, adapterIndex );
 	if( initReturnCode != EXIT_SUCCESS )
 	{
 		printError( initReturnCode );
-
 		return EXIT_FAILURE;
 	};
 
@@ -148,11 +170,11 @@ int main( int argc, char** argv )
 	if( initReturnCode != EXIT_SUCCESS )
 	{
 		printError( initReturnCode );
-
 		adapter->Release();
 		return EXIT_FAILURE;
 	};
 
+	GPUDetect::GPUData gpuData = {};
 	initReturnCode = GPUDetect::InitExtensionInfo( &gpuData, adapter, device );
 	if( initReturnCode != EXIT_SUCCESS )
 	{
@@ -160,9 +182,7 @@ int main( int argc, char** argv )
 	}
 	else
 	{
-		std::wstring gpuDescription = gpuData.description;
-
-		printf( "Graphics Device #%u\n", adapterIndex );
+		printf( "Graphics Device #%d\n", adapterIndex );
 		printf( "-----------------------\n" );
 		printf( "Vendor: 0x%x\n", gpuData.vendorID );
 		printf( "Device: 0x%x\n", gpuData.deviceID );
@@ -173,21 +193,21 @@ int main( int argc, char** argv )
 		//
 		//  Find and print driver version information
 		//
-		GPUDetect::InitDxDriverVersion( &gpuData );
-		if( gpuData.d3dRegistryDataAvalibility )
+		initReturnCode = GPUDetect::InitDxDriverVersion( &gpuData );
+		if( gpuData.d3dRegistryDataAvailability )
 		{
 			printf( "\nDriver Information\n" );
 			printf( "-----------------------\n" );
-			char driverVersion[ 16 ];
-			GPUDetect::GetDriverVersionAsCString( &gpuData, driverVersion );
+
+			char driverVersion[ 19 ] = {};
+			GPUDetect::GetDriverVersionAsCString( &gpuData, driverVersion, _countof(driverVersion) );
 			printf( "Driver Version: %s\n", driverVersion );
 
 			// Print out decoded data
-			printf("WDDM Version: %1.1f\n", GPUDetect::GetWDDMVersion(&gpuData));
-			printf("DirectX Version: %1.1f\n", GPUDetect::GetDirectXVersion(&gpuData));
-			printf("Release Revision: %i\n", gpuData.driverInfo.driverReleaseRevision);
-			printf("Build Number: %i\n", gpuData.driverInfo.driverBuildNumber);
-
+			printf( "WDDM Version: %1.1f\n", GPUDetect::GetWDDMVersion( &gpuData ));
+			printf( "DirectX Version: %1.1f\n", GPUDetect::GetDirectXVersion( &gpuData ));
+			printf( "Release Revision: %u\n", gpuData.driverInfo.driverReleaseRevision );
+			printf( "Build Number: %u\n", gpuData.driverInfo.driverBuildNumber );
 			printf( "\n" );
 		}
 
@@ -197,6 +217,7 @@ int main( int argc, char** argv )
 		//
 		if( gpuData.vendorID == GPUDetect::INTEL_VENDOR_ID )
 		{
+			const std::wstring gpuDescription = gpuData.description;
 			if( gpuDescription.find( L"Iris" ) != std::wstring::npos )
 			{
 				if( gpuDescription.find( L"Pro" ) != std::wstring::npos )
@@ -215,27 +236,27 @@ int main( int argc, char** argv )
 		// to example quality presets.  This looks up the preset for the IDs
 		// queried above.
 		//
-		GPUDetect::PresetLevel defPresets = GPUDetect::GetDefaultFidelityPreset( &gpuData );
+		const GPUDetect::PresetLevel defPresets = GPUDetect::GetDefaultFidelityPreset( &gpuData );
 		switch( defPresets )
 		{
-		case GPUDetect::PresetLevel::NotCompatible: printf( "Default Presets: NotCompatible\n" ); break;
-		case GPUDetect::PresetLevel::Low:           printf( "Default Presets: Low\n" ); break;
-		case GPUDetect::PresetLevel::Medium:        printf( "Default Presets: Medium\n" ); break;
-		case GPUDetect::PresetLevel::MediumPlus:    printf( "Default Presets: Medium+\n" ); break;
-		case GPUDetect::PresetLevel::High:          printf( "Default Presets: High\n" ); break;
-		case GPUDetect::PresetLevel::Undefined:     printf( "Default Presets: Undefined\n" ); break;
+		case GPUDetect::PresetLevel::NotCompatible: printf( "Default Fidelity Preset Level: NotCompatible\n" ); break;
+		case GPUDetect::PresetLevel::Low:           printf( "Default Fidelity Preset Level: Low\n" ); break;
+		case GPUDetect::PresetLevel::Medium:        printf( "Default Fidelity Preset Level: Medium\n" ); break;
+		case GPUDetect::PresetLevel::MediumPlus:    printf( "Default Fidelity Preset Level: Medium+\n" ); break;
+		case GPUDetect::PresetLevel::High:          printf( "Default Fidelity Preset Level: High\n" ); break;
+		case GPUDetect::PresetLevel::Undefined:     printf( "Default Fidelity Preset Level: Undefined\n" ); break;
 		}
 
 		//
 		// Check if Intel DirectX extensions are available on this system.
 		//
-		if( gpuData.intelExtentionAvalibility )
+		if( gpuData.vendorID == GPUDetect::INTEL_VENDOR_ID && gpuData.intelExtensionAvailability )
 		{
 			printf( "Supports Intel Iris Graphics extensions:\n" );
 			printf( "\tpixel synchronization\n" );
 			printf( "\tinstant access of graphics memory\n" );
 		}
-		else
+		else if( gpuData.vendorID == GPUDetect::INTEL_VENDOR_ID )
 		{
 			printf( "Does not support Intel Iris Graphics extensions\n" );
 		}
@@ -245,49 +266,44 @@ int main( int argc, char** argv )
 		// querying a special DX counter
 		//
 
-		if( gpuData.vendorID == GPUDetect::INTEL_VENDOR_ID )
+		// Populate the GPU architecture data with info from the counter, otherwise gpuDetect will use the value we got from the Dx11 extension
+		initReturnCode = GPUDetect::InitCounterInfo( &gpuData, device );
+		if( initReturnCode != EXIT_SUCCESS )
 		{
-			GPUDetect::INTEL_GPU_ARCHITECTURE arch = GPUDetect::getIntelGPUArchitecture( gpuData.deviceID );
+			printError( initReturnCode );
+		}
+		else
+		{
+			char generationString[256] = "Not set.";
+			GPUDetect::GetIntelGraphicsGenerationAsCString( GPUDetect::GetIntelGraphicsGeneration( gpuData.architectureCounter ), generationString, _countof( generationString ));
+			printf("Using %s graphics\n", generationString);
 
-			// Populate the GPU architecture data with info from the counter, otherwise gpuDetect will use the value we got from the Dx11 extension
-			initReturnCode = GPUDetect::InitCounterInfo( &gpuData, device );
+			const GPUDetect::INTEL_GPU_ARCHITECTURE arch = GPUDetect::GetIntelGPUArchitecture( gpuData.deviceID );
+			printf( "Architecture (from device id): %s (0x%x)\n", GPUDetect::GetIntelGPUArchitectureString( arch ), arch );
 
-			if( initReturnCode != EXIT_SUCCESS )
+			//
+			// Older versions of the IntelDeviceInfo query only return
+			// GPUMaxFreq and GPUMinFreq, all other members will be zero.
+			//
+			if( gpuData.advancedCounterDataAvailability )
 			{
-				printError( initReturnCode );
+				printf( "Architecture (from device info): %s (0x%x)\n", GPUDetect::GetIntelGPUArchitectureString( gpuData.architectureCounter ), gpuData.architectureCounter );
+				printf( "EU Count:          %u\n", gpuData.euCount );
+				printf( "Package TDP:       %u W\n", gpuData.packageTDP );
+				printf( "Max Fill Rate:     %u pixels/clock\n", gpuData.maxFillRate );
 			}
-			else
-			{
-				printf( "Architecture (from device id): %s (0x%x)\n", getIntelGPUArchitectureString( arch ), arch );
 
-				//
-				// Older versions of the IntelDeviceInfo query only return
-				// GPUMaxFreq and GPUMinFreq, all other members will be zero.
-				//
-				if( gpuData.advancedCounterDataAvalibility )
-				{
-					printf( "Architecture (from device info): %s (0x%x)\n", GPUDetect::getIntelGPUArchitectureString( gpuData.architectureCounter ), gpuData.architectureCounter );
-					printf( "EU Count:          %d\n", gpuData.euCount );
-					printf( "Package TDP:       %d W\n", gpuData.packageTDP );
-					printf( "Max Fill Rate:     %d pixels/clock\n", gpuData.maxFillRate );
-				}
-
-				printf( "GPU Max Frequency: %d MHz\n", gpuData.maxFrequency );
-				printf( "GPU Min Frequency: %d MHz\n", gpuData.minFrequency );
-			}
+			printf( "GPU Max Frequency: %u MHz\n", gpuData.maxFrequency );
+			printf( "GPU Min Frequency: %u MHz\n", gpuData.minFrequency );
 		}
 
 		printf( "\n" );
 	}
 
-	adapter->Release();
 	device->Release();
+	adapter->Release();
 
 	printf( "\n" );
-	printf( "Press any key to exit...\n" );
-
-	_getch();
 
 	return 0;
 }
-
