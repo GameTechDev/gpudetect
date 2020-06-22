@@ -204,8 +204,6 @@ int main( int argc, char** argv )
 			printf( "Driver Version: %s\n", driverVersion );
 
 			// Print out decoded data
-			printf( "WDDM Version: %1.1f\n", GPUDetect::GetWDDMVersion( &gpuData ));
-			printf( "DirectX Version: %1.1f\n", GPUDetect::GetDirectXVersion( &gpuData ));
 			printf( "Release Revision: %u\n", gpuData.driverInfo.driverReleaseRevision );
 			printf( "Build Number: %u\n", gpuData.driverInfo.driverBuildNumber );
 			printf( "\n" );

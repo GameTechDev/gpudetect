@@ -522,8 +522,6 @@ int InitDxDriverVersion( GPUData* const gpuData )
 	gpuData->dxDriverVersion[ 2 ] = (unsigned int) ( ( driverVersionRaw & 0x00000000FFFF0000 ) >> 16 * 1 );
 	gpuData->dxDriverVersion[ 3 ] = (unsigned int) ( ( driverVersionRaw & 0x000000000000FFFF ) );
 
-	gpuData->driverInfo.osVersionID = gpuData->dxDriverVersion[0];
-	gpuData->driverInfo.directXVersionID = gpuData->dxDriverVersion[1];
 	gpuData->driverInfo.driverReleaseRevision = gpuData->dxDriverVersion[2];
 	gpuData->driverInfo.driverBuildNumber = gpuData->dxDriverVersion[3];
 
@@ -542,59 +540,13 @@ void GetDriverVersionAsCString( const GPUData* const gpuData, char* const outBuf
 	}
 }
 
-float GetWDDMVersion( const GPUData* const gpuData )
-{
-	if( gpuData == nullptr || !gpuData->d3dRegistryDataAvailability )
-	{
-		return -1.0f;
-	}
-
-	switch( gpuData->driverInfo.osVersionID )
-	{
-	// Most of the time, just shift the decimal to the left
-	default:                   return (float)gpuData->driverInfo.osVersionID / 10;
-
-	// Versions that can't be derived by shifting the decimal
-	case OSVersion::WIN_VISTA: return 1.0f;
-	case OSVersion::WIN_7:     return 1.1f;
-	case OSVersion::WIN_8:     return 1.2f;
-	case OSVersion::WIN_8_1:   return 1.3f;
-
-	// OS IDs that come before WDDM
-	case 6:
-	case 5:
-	case 4:                    return -1.0f;
-	}
-}
-
-float GetDirectXVersion( const GPUData* const gpuData )
-{
-	if ( gpuData == nullptr || !gpuData->d3dRegistryDataAvailability )
-	{
-		return -1.0f;
-	}
-
-	switch( gpuData->driverInfo.directXVersionID )
-	{
-	case DXVersion::DX_12_1: return 12.1f;
-	case DXVersion::DX_12_0: return 12.0f;
-	case DXVersion::DX_11_1: return 11.1f;
-	case DXVersion::DX_11_0: return 11.0f;
-	case DXVersion::DX_10_X: return 10.f;
-	case DXVersion::DX_9_X:  return 9.f;
-	case DXVersion::DX_8_X:  return 8.f;
-	case DXVersion::DX_7_X:  return 7.f;
-	case DXVersion::DX_6_X:  return 6.f;
-
-	default: return -1.0f;
-	}
-}
-
 GPUDetect::IntelGraphicsGeneration GPUDetect::GetIntelGraphicsGeneration( INTEL_GPU_ARCHITECTURE architecture )
 {
 	switch( architecture )
 	{
 		case IGFX_SANDYBRIDGE:
+			return INTEL_GFX_GEN6;
+
 		case IGFX_IVYBRIDGE:
 			return INTEL_GFX_GEN7;
 

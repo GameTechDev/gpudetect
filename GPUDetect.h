@@ -79,40 +79,6 @@ namespace GPUDetect
 				   // Use a default level for unknown video cards.
 	};
 
-	// The definitions for OS versions
-	enum OSVersion
-	{
-		WIN_95_98_98SE_ME_NT = 4, // Windows 95/98/98SE/Me/NT
-		WIN_2000, // Windows 2000
-		WIN_2000_XP, // Windows 2000 or XP
-		WIN_VISTA, // Windows Vista
-		WIN_7, // Windows 7
-		WIN_8, // Windows 8
-		WIN_8_1, // Windows 8.1
-
-		WIN_10 = 20, // Windows 10
-		WIN_10_ANNIVERSARY, // Windows 10 Anniversary Update
-		WIN_10_CREATORS, // Windows 10 Creators Update
-		WIN_10_FALL_CREATORS, // Windows 10 Fall Creators Update
-		WIN_10_APRIL_2018, // Windows 10 April 2018 Update
-		WIN_10_OCTOBER_2018, // Windows 10 October 2018 Update
-		WIN_10_MAY_2019 // Windows 10 May 2019 Update
-	};
-
-	// The definitions for DX versions in the driver number
-	enum DXVersion
-	{
-		DX_6_X = 11,
-		DX_7_X,
-		DX_8_X,
-		DX_9_X,
-		DX_10_X,
-		DX_11_0 = 17,
-		DX_11_1,
-		DX_12_0,
-		DX_12_1
-	};
-
 	// An enum that identifies the generation of Graphics
 	enum IntelGraphicsGeneration
 	{
@@ -341,9 +307,9 @@ namespace GPUDetect
 		 * d3dRegistryDataAvailability
 		 *
 		 *     Is true if d3d registry data is populated. If this value is true and
-		 *     vendorID == INTEL_VENDOR_ID, then the intelDriverInfo fields will be
-		 *     populated. If this value is false, all other registry data data will be
-		 *     null.
+		 *     vendorID == INTEL_VENDOR_ID, then the driverInfo and dxDriverVersion 
+		 *     fields will be populated. If this value is false, all other registry data
+		 *     will be null.
 		 *
 		 *     This value is initialized by the InitDxDriverVersion function.
 		 *
@@ -352,33 +318,6 @@ namespace GPUDetect
 
 		struct DriverVersionInfo
 		{
-			/*******************************************************************************
-			 * osVersionID
-			 *
-			 *     The OS version ID for this device's driver. This is the first
-			 *     section of the driver version number as illustrated by the 'X's below:
-			 *     XX.00.000.0000
-			 *     This can then be translated to a WDDM version using GetWDDMVersion().
-			 *
-			 *     This value is initialized by the InitDxDriverVersion function.
-			 *
-			 ******************************************************************************/
-			unsigned int osVersionID;
-
-			/*******************************************************************************
-			 * directXVersionID
-			 *
-			 *     The DX version ID for this device's driver. This is the second
-			 *     section of the driver version number as illustrated by the 'X's below:
-			 *     00.XX.000.0000
-			 *     This can then be translated to a DX version number using
-			 *     GetDirectXVersion().
-			 *
-			 *     This value is initialized by the InitDxDriverVersion function.
-			 *
-			 ******************************************************************************/
-			unsigned int directXVersionID;
-
 			/*******************************************************************************
 			 * driverReleaseRevision
 			 *
@@ -560,30 +499,6 @@ namespace GPUDetect
 	 *
 	 ******************************************************************************/
 	void GetDriverVersionAsCString( const GPUData* const gpuData, char* const outBuffer, size_t outBufferSize );
-
-	/*******************************************************************************
-	 * GetWDDMVersion
-	 *
-	 *     Returns the Windows Display Driver Model (WDDM) number as derived from
-	 *     the driver version if possible. Otherwise, returns -1.0f.
-	 *
-	 *     gpuData
-	 *         The struct that contains the driver version.
-	 *
-	 ******************************************************************************/
-	float GetWDDMVersion( const GPUData* const gpuData );
-
-	/*******************************************************************************
-	 * GetDirectXVersion
-	 *
-	 *     Returns the DX version number as derived from the driver version if
-	 *     possible. Otherwise, returns -1.0f.
-	 *
-	 *     gpuData
-	 *         The struct that contains the driver version.
-	 *
-	 ******************************************************************************/
-	float GetDirectXVersion( const GPUData* const gpuData );
 
 	/*******************************************************************************
 	 * GetIntelGraphicsGeneration
