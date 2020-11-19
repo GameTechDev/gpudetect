@@ -112,7 +112,7 @@ namespace GPUDetect
 
 		if( idhi == 0x9A00 )
 		{
-			return IGFX_ICELAKE_LP;
+			return IGFX_TIGERLAKE;
 		}
 
 		return IGFX_UNKNOWN;
