@@ -54,7 +54,7 @@ static_assert( sizeof(IntelDeviceInfo2) == 24, "struct size mismatch" );
 namespace GPUDetect
 {
 
-// Returns RETURN_SUCCESS if successfully initialized
+// Returns EXIT_SUCCESS if successfully initialized
 int GetIntelDeviceInfo( IntelDeviceInfo2* deviceInfo, ID3D11Device* device );
 
 
@@ -540,7 +540,7 @@ void GetDriverVersionAsCString( const GPUData* const gpuData, char* const outBuf
 	}
 }
 
-GPUDetect::IntelGraphicsGeneration GPUDetect::GetIntelGraphicsGeneration( INTEL_GPU_ARCHITECTURE architecture )
+GPUDetect::IntelGraphicsGeneration GetIntelGraphicsGeneration( INTEL_GPU_ARCHITECTURE architecture )
 {
 	switch( architecture )
 	{
@@ -574,12 +574,16 @@ GPUDetect::IntelGraphicsGeneration GPUDetect::GetIntelGraphicsGeneration( INTEL_
 		case IGFX_ICELAKE_LP:
 			return INTEL_GFX_GEN11;
 
+		case IGFX_TIGERLAKE:
+		case IGFX_DG1:
+			return INTEL_GFX_XE;
+
 		default:
 			return INTEL_GFX_GEN_UNKNOWN;
 	}
 }
 
-void GPUDetect::GetIntelGraphicsGenerationAsCString( const IntelGraphicsGeneration generation, char* const outBuffer, size_t outBufferSize )
+void GetIntelGraphicsGenerationAsCString( const IntelGraphicsGeneration generation, char* const outBuffer, size_t outBufferSize )
 {
 #ifdef GPUDETECT_CHECK_PRECONDITIONS
 	// Check preconditions
@@ -602,6 +606,7 @@ void GPUDetect::GetIntelGraphicsGenerationAsCString( const IntelGraphicsGenerati
 	case INTEL_GFX_GEN9_5:      strcpy_s( outBuffer, outBufferSize, "Gen9.5" ); break;
 	case INTEL_GFX_GEN10:       strcpy_s( outBuffer, outBufferSize, "Gen10"  ); break;
 	case INTEL_GFX_GEN11:       strcpy_s( outBuffer, outBufferSize, "Gen11"  ); break;
+	case INTEL_GFX_XE:          strcpy_s( outBuffer, outBufferSize, "Xe"  ); break;
 	}
 }
 

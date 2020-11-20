@@ -90,7 +90,9 @@ namespace GPUDetect
 		INTEL_GFX_GEN9,
 		INTEL_GFX_GEN9_5, // 9.5
 		INTEL_GFX_GEN10,
-		INTEL_GFX_GEN11
+		INTEL_GFX_GEN11,
+		INTEL_GFX_XE
+
 	};
 
 	struct GPUData

@@ -41,6 +41,8 @@ namespace GPUDetect
 		IGFX_LAKEFIELD,
 		IGFX_TIGERLAKE,
 
+		IGFX_DG1 = 1210,
+
 		IGFX_MAX_PRODUCT,
 
 		// Architectures with no enum value
