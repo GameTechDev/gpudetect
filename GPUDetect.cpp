@@ -15,23 +15,41 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef STRICT
+#define STRICT
+#endif
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#ifndef VC_EXTRALEAN
+#define VC_EXTRALEAN
+#endif
+
+#include <windows.h>
+
 #include <dxgi.h>
 #include <d3d11.h>
 #ifdef _WIN32_WINNT_WIN10
 #include <d3d11_3.h>
 #endif
+
 #include "ID3D10Extensions.h"
+
 #include <winreg.h>
 #include <tchar.h>
 
-#include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdlib>
+#include <cstdio>
 
 #include "GPUDetect.h"
 
-
-#define MAX_KEY_LENGTH 255
 
 // These should only be needed for reading data from the counter
 struct IntelDeviceInfo1
@@ -43,7 +61,7 @@ static_assert( sizeof(IntelDeviceInfo1) == 8, "struct size mismatch" );
 
 struct IntelDeviceInfo2 : public IntelDeviceInfo1
 {
-	DWORD GPUArchitecture;   // INTEL_GPU_ARCHITECTURE
+	DWORD GPUArchitecture;   // should match INTEL_GPU_ARCHITECTURE
 	DWORD EUCount;
 	DWORD PackageTDP;
 	DWORD MaxFillRate;
@@ -187,9 +205,8 @@ int InitExtensionInfo( GPUData* const gpuData, IDXGIAdapter* adapter, ID3D11Devi
 	// Intel specific information
 	if( AdapterDesc.VendorId == INTEL_VENDOR_ID )
 	{
-		gpuData->architectureCounter = GetIntelGPUArchitecture(gpuData->deviceID);
+		gpuData->architecture = GetIntelGPUArchitecture(gpuData->deviceID);
 
-		//if (AdapterDesc.VendorId == INTEL_VENDOR_ID
 		ID3D10::CAPS_EXTENSION intelExtCaps = {};
 		if (S_OK == GetExtensionCaps(device, &intelExtCaps))
 		{
@@ -231,7 +248,7 @@ int InitCounterInfo( GPUData* const gpuData, int adapterIndex )
 
 int InitCounterInfo( GPUData* const gpuData, ID3D11Device* device )
 {
-	if( gpuData == nullptr || device == nullptr )
+	if( gpuData == nullptr || device == nullptr || gpuData->vendorID == 0 || gpuData->deviceID == 0 )
 	{
 		return GPUDETECT_ERROR_BAD_DATA;
 	}
@@ -264,7 +281,10 @@ int InitCounterInfo( GPUData* const gpuData, ID3D11Device* device )
 		if (info.GPUArchitecture != IGFX_UNKNOWN)
 		{
 			gpuData->advancedCounterDataAvailability = true;
-			gpuData->architectureCounter = (INTEL_GPU_ARCHITECTURE)info.GPUArchitecture;
+
+			gpuData->architecture = (INTEL_GPU_ARCHITECTURE)info.GPUArchitecture;
+			assert(gpuData->architecture == GetIntelGPUArchitecture(gpuData->deviceID));
+
 			gpuData->euCount = info.EUCount;
 			gpuData->packageTDP = info.PackageTDP;
 			gpuData->maxFillRate = info.MaxFillRate;
@@ -380,7 +400,7 @@ PresetLevel GetDefaultFidelityPreset( const GPUData* const gpuData )
 	}
 	else
 	{
-		printf( "Error: %s not found! Fallback to default presets.\n", cfgFileName );
+		fprintf( stderr, "Error: %s not found! Fallback to default presets.\n", cfgFileName );
 	}
 
 	//
@@ -548,6 +568,7 @@ GPUDetect::IntelGraphicsGeneration GetIntelGraphicsGeneration( INTEL_GPU_ARCHITE
 			return INTEL_GFX_GEN6;
 
 		case IGFX_IVYBRIDGE:
+		case IGFX_VALLEYVIEW:
 			return INTEL_GFX_GEN7;
 
 		case IGFX_HASWELL:
@@ -564,6 +585,7 @@ GPUDetect::IntelGraphicsGeneration GetIntelGraphicsGeneration( INTEL_GPU_ARCHITE
 		case IGFX_KABYLAKE:
 		case IGFX_WHISKEYLAKE:
 		case IGFX_COFFEELAKE:
+		case IGFX_COMETLAKE:
 			return INTEL_GFX_GEN9_5;
 
 		case IGFX_CANNONLAKE:
@@ -574,39 +596,33 @@ GPUDetect::IntelGraphicsGeneration GetIntelGraphicsGeneration( INTEL_GPU_ARCHITE
 		case IGFX_ICELAKE_LP:
 			return INTEL_GFX_GEN11;
 
-		case IGFX_TIGERLAKE:
+		case IGFX_TIGERLAKE_LP:
 		case IGFX_DG1:
-			return INTEL_GFX_XE;
+		case IGFX_ROCKETLAKE:
+			return INTEL_GFX_GEN12;
+
 
 		default:
 			return INTEL_GFX_GEN_UNKNOWN;
 	}
 }
 
-void GetIntelGraphicsGenerationAsCString( const IntelGraphicsGeneration generation, char* const outBuffer, size_t outBufferSize )
+const char * GetIntelGraphicsGenerationString( const IntelGraphicsGeneration generation)
 {
-#ifdef GPUDETECT_CHECK_PRECONDITIONS
-	// Check preconditions
-	if ( outBuffer == nullptr || outBufferSize < 7 || outBufferSize > RSIZE_MAX )
-	{
-		return;
-	}
-#endif
-
 	switch( generation )
 	{
-	default:
-	case INTEL_GFX_GEN_UNKNOWN: strcpy_s( outBuffer, outBufferSize, "Unkown" ); break;
+		case INTEL_GFX_GEN6:   return "Gen6";
+		case INTEL_GFX_GEN7:   return "Gen7";
+		case INTEL_GFX_GEN7_5: return "Gen7.5";
+		case INTEL_GFX_GEN8:   return "Gen8";
+		case INTEL_GFX_GEN9:   return "Gen9";
+		case INTEL_GFX_GEN9_5: return "Gen9.5";
+		case INTEL_GFX_GEN10:  return "Gen10";
+		case INTEL_GFX_GEN11:  return "Gen11";
+		case INTEL_GFX_GEN12:  return "Gen12 / Xe";
 
-	case INTEL_GFX_GEN6:        strcpy_s( outBuffer, outBufferSize, "Gen6"   ); break;
-	case INTEL_GFX_GEN7:        strcpy_s( outBuffer, outBufferSize, "Gen7"   ); break;
-	case INTEL_GFX_GEN7_5:      strcpy_s( outBuffer, outBufferSize, "Gen7.5" ); break;
-	case INTEL_GFX_GEN8:        strcpy_s( outBuffer, outBufferSize, "Gen8"   ); break;
-	case INTEL_GFX_GEN9:        strcpy_s( outBuffer, outBufferSize, "Gen9"   ); break;
-	case INTEL_GFX_GEN9_5:      strcpy_s( outBuffer, outBufferSize, "Gen9.5" ); break;
-	case INTEL_GFX_GEN10:       strcpy_s( outBuffer, outBufferSize, "Gen10"  ); break;
-	case INTEL_GFX_GEN11:       strcpy_s( outBuffer, outBufferSize, "Gen11"  ); break;
-	case INTEL_GFX_XE:          strcpy_s( outBuffer, outBufferSize, "Xe"  ); break;
+		case INTEL_GFX_GEN_UNKNOWN:
+		default:               return "Unkown";
 	}
 }
 

@@ -17,8 +17,6 @@
 
 #pragma once
 
-
-#include <windows.h>
 #include <stdint.h>
 
 #include "DeviceId.h"
@@ -85,14 +83,13 @@ namespace GPUDetect
 		INTEL_GFX_GEN_UNKNOWN = 0,
 		INTEL_GFX_GEN6,
 		INTEL_GFX_GEN7,
-		INTEL_GFX_GEN7_5, // 7.5
+		INTEL_GFX_GEN7_5,
 		INTEL_GFX_GEN8,
 		INTEL_GFX_GEN9,
-		INTEL_GFX_GEN9_5, // 9.5
+		INTEL_GFX_GEN9_5,
 		INTEL_GFX_GEN10,
 		INTEL_GFX_GEN11,
-		INTEL_GFX_XE
-
+		INTEL_GFX_GEN12,
 	};
 
 	struct GPUData
@@ -141,6 +138,16 @@ namespace GPUDetect
 		 *
 		 ******************************************************************************/
 		LUID adapterLUID;
+
+		/*******************************************************************************
+		* architectureCounter
+		*
+		*     The architecture of the GPU.
+		*
+		*     This value is initialized by the InitExtensionInfo function.
+		*
+		******************************************************************************/
+		INTEL_GPU_ARCHITECTURE architecture;
 
 		/*******************************************************************************
 		 * isUMAArchitecture
@@ -248,17 +255,6 @@ namespace GPUDetect
 		 *
 		 ******************************************************************************/
 		bool advancedCounterDataAvailability;
-
-		/*******************************************************************************
-		 * architectureCounter
-		 *
-		 *     A counter that indicates which architecture the GPU uses.
-		 *
-		 *     This value is initialized by the InitCounterInfo function or the
-		 *     InitExtensionInfo function.
-		 *
-		 ******************************************************************************/
-		INTEL_GPU_ARCHITECTURE architectureCounter;
 
 		/*******************************************************************************
 		 * euCount
@@ -514,21 +510,15 @@ namespace GPUDetect
 	IntelGraphicsGeneration GetIntelGraphicsGeneration( INTEL_GPU_ARCHITECTURE architecture );
 
 	/*******************************************************************************
-	 * GetIntelGraphicsGenerationAsCString
+	 * GetIntelGraphicsGenerationString
 	 *
 	 *     Returns the generation of Intel(tm) Graphics, given the architecture.
 	 *
 	 *     generation
 	 *         The generation to identify.
 	 *
-	 *     outBuffer
-	 *         Buffer to store the resulting c string.
-	 *
-	 *     outBufferSize
-	 *         Size of buffer to store the resulting c string. Must be > 7 bytes!
-	 *
 	 ******************************************************************************/
-	void GetIntelGraphicsGenerationAsCString( const IntelGraphicsGeneration genneration, char* const outBuffer, size_t outBufferSize  );
+	const char * GetIntelGraphicsGenerationString( const IntelGraphicsGeneration genneration );
 
 	/*******************************************************************************
 	 * InitAdapter

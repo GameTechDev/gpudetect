@@ -14,7 +14,7 @@
 // limitations under the License.
 ////////////////////////////////////////////////////////////////////////////////
 
-
+#include <cassert>
 #include "DeviceId.h"
 
 
@@ -37,20 +37,28 @@ namespace GPUDetect
 		case IGFX_WILLOWVIEW:    return "Willowview";
 		case IGFX_BROXTON:       return "Broxton";
 		case IGFX_GEMINILAKE:    return "Geminilake";
-		case IGFX_CANNONLAKE:    return "Cannonlake";
-		case IGFX_ICELAKE:       return "Icelake";
-		case IGFX_ICELAKE_LP:    return "Icelake Low Power";
-		case IGFX_LAKEFIELD:     return "Lakefield";
-		case IGFX_TIGERLAKE:     return "Tigerlake";
 
-		case IGFX_DG1:     return "DG1";
+		case IGFX_CANNONLAKE:    return "Cannonlake";
+
+		case IGFX_ICELAKE:       return "Icelake";
+		case IGFX_ICELAKE_LP:    return "Icelake LP";
+		case IGFX_LAKEFIELD:     return "Lakefield";
+
+		case IGFX_TIGERLAKE_LP:  return "Tigerlake LP";
+
+		case IGFX_ROCKETLAKE:	 return "Rocketlake";
+
+		case IGFX_DG1:           return "DG1";
 
 		// Architectures with no unique enum value, but that still can be determined from DeviceID
 		case IGFX_WHISKEYLAKE:   return "Whiskeylake";
+		case IGFX_COMETLAKE:	 return "Cometlake";
 
 		case IGFX_UNKNOWN:
 		case IGFX_MAX_PRODUCT:
-		default:                 return "Unknown";
+		default:
+			assert(false);
+			return "Unknown";
 		}
 	}
 
@@ -114,7 +122,7 @@ namespace GPUDetect
 
 		if( idhi == 0x9A00 )
 		{
-			return IGFX_TIGERLAKE;
+			return IGFX_TIGERLAKE_LP;
 		}
 
 		if( idhi == 0x4900 )
@@ -122,6 +130,17 @@ namespace GPUDetect
 			return IGFX_DG1;
 		}
 
+		if (idhi == 0x4C00)
+		{
+			return IGFX_ROCKETLAKE;
+		}
+
+		if (idhi == 0x9B00)
+		{
+			return IGFX_COMETLAKE;
+		}
+
+		assert(false);
 		return IGFX_UNKNOWN;
 	}
 

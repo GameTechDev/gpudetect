@@ -23,6 +23,7 @@ namespace GPUDetect
 	enum INTEL_GPU_ARCHITECTURE
 	{
 		IGFX_UNKNOWN = 0x00,
+
 		IGFX_SANDYBRIDGE = 0x0c,
 		IGFX_IVYBRIDGE,
 		IGFX_HASWELL,
@@ -35,18 +36,25 @@ namespace GPUDetect
 		IGFX_WILLOWVIEW,
 		IGFX_BROXTON,
 		IGFX_GEMINILAKE,
-		IGFX_CANNONLAKE = 0x18,
+
+		IGFX_CANNONLAKE = 0x1a,
+
 		IGFX_ICELAKE = 0x1c,
 		IGFX_ICELAKE_LP,
-		IGFX_LAKEFIELD,
-		IGFX_TIGERLAKE,
 
-		IGFX_DG1 = 1210,
+		IGFX_LAKEFIELD = 0x1e,
+
+		IGFX_TIGERLAKE_LP = 0x21,
+		
+		IGFX_ROCKETLAKE = 0x23, 
+
+		IGFX_DG1 = 0x4ba,
 
 		IGFX_MAX_PRODUCT,
 
 		// Architectures with no enum value
-		IGFX_WHISKEYLAKE
+		IGFX_WHISKEYLAKE,
+		IGFX_COMETLAKE
 	};
 
 	/*******************************************************************************

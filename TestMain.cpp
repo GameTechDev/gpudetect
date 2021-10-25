@@ -14,6 +14,23 @@
 // limitations under the License.
 ////////////////////////////////////////////////////////////////////////////////
 
+#ifndef STRICT
+#define STRICT
+#endif
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#ifndef VC_EXTRALEAN
+#define VC_EXTRALEAN
+#endif
+
+#include <windows.h>
 
 #include <dxgi.h>
 #include <d3d11.h>
@@ -21,9 +38,9 @@
 #include <d3d11_3.h>
 #endif
 
-#include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdlib>
+#include <cstdio>
 #include <string>
 
 #include "GPUDetect.h"
@@ -133,12 +150,12 @@ void printError( int errorCode )
  ******************************************************************************/
 int main( int argc, char** argv )
 {
-	printf("\n\n[ Intel GPUDetect ]\n");
-	printf("Build Info: %s, %s\n", __DATE__, __TIME__);
+	fprintf( stdout, "\n\n[ Intel GPUDetect ]\n" );
+	fprintf( stdout, "Build Info: %s, %s\n", __DATE__, __TIME__ );
 
 	int adapterIndex = 0;
 
-	if ( argc == 1 )
+	if( argc == 1 )
 	{
 		fprintf( stdout, "Usage: GPUDetect adapter_index\n" );
 		fprintf( stdout, "Defaulting to adapter_index = %d\n", adapterIndex );
@@ -154,7 +171,7 @@ int main( int argc, char** argv )
 		fprintf( stderr, "Error: unexpected arguments.\n" );
 		return EXIT_FAILURE;
 	}
-	printf( "\n" );
+	fprintf( stdout,  "\n" );
 
 
 	IDXGIAdapter* adapter = nullptr;
@@ -182,13 +199,13 @@ int main( int argc, char** argv )
 	}
 	else
 	{
-		printf( "Graphics Device #%d\n", adapterIndex );
-		printf( "-----------------------\n" );
-		printf( "Vendor: 0x%x\n", gpuData.vendorID );
-		printf( "Device: 0x%x\n", gpuData.deviceID );
-		printf( "Video Memory: %I64u MB\n", gpuData.videoMemory / ( 1024 * 1024 ) );
-		printf( "Description: %S\n", gpuData.description );
-		printf( "\n" );
+		fprintf( stdout, "Adapter #%d\n", adapterIndex );
+		fprintf( stdout, "-----------------------\n" );
+		fprintf( stdout, "VendorID: 0x%x\n", gpuData.vendorID );
+		fprintf( stdout, "DeviceID: 0x%x\n", gpuData.deviceID );
+		fprintf( stdout, "Video Memory: %I64u MB\n", gpuData.videoMemory / ( 1024 * 1024 ) );
+		fprintf( stdout, "Description: %S\n", gpuData.description );
+		fprintf( stdout, "\n" );
 
 		//
 		//  Find and print driver version information
@@ -196,112 +213,99 @@ int main( int argc, char** argv )
 		initReturnCode = GPUDetect::InitDxDriverVersion( &gpuData );
 		if( gpuData.d3dRegistryDataAvailability )
 		{
-			printf( "\nDriver Information\n" );
-			printf( "-----------------------\n" );
+			fprintf( stdout, "\nDriver Information\n" );
+			fprintf( stdout, "-----------------------\n" );
 
 			char driverVersion[ 19 ] = {};
 			GPUDetect::GetDriverVersionAsCString( &gpuData, driverVersion, _countof(driverVersion) );
-			printf( "Driver Version: %s\n", driverVersion );
+			fprintf( stdout, "Driver Version: %s\n", driverVersion );
 
 			// Print out decoded data
-			printf( "Release Revision: %u\n", gpuData.driverInfo.driverReleaseRevision );
-			printf( "Build Number: %u\n", gpuData.driverInfo.driverBuildNumber );
-			printf( "\n" );
+			fprintf( stdout, "Release Revision: %u\n", gpuData.driverInfo.driverReleaseRevision );
+			fprintf( stdout, "Build Number: %u\n", gpuData.driverInfo.driverBuildNumber );
+			fprintf( stdout, "\n" );
 		}
 
-		//
-		// Similar to the CPU brand, we can also parse the GPU description string
-		// for information like whether the GPU is an Intel Iris or Iris Pro part.
-		//
 		if( gpuData.vendorID == GPUDetect::INTEL_VENDOR_ID )
 		{
-			const std::wstring gpuDescription = gpuData.description;
-			if( gpuDescription.find( L"Iris" ) != std::wstring::npos )
-			{
-				if( gpuDescription.find( L"Pro" ) != std::wstring::npos )
-				{
-					printf( "             Iris Pro Graphics Brand Found\n" );
-				}
-				else
-				{
-					printf( "             Iris Graphics Brand Found\n" );
-				}
-			}
-		}
 
-		//
-		// This sample includes a .cfg file that maps known vendor and device IDs
-		// to example quality presets.  This looks up the preset for the IDs
-		// queried above.
-		//
-		const GPUDetect::PresetLevel defPresets = GPUDetect::GetDefaultFidelityPreset( &gpuData );
-		switch( defPresets )
-		{
-		case GPUDetect::PresetLevel::NotCompatible: printf( "Default Fidelity Preset Level: NotCompatible\n" ); break;
-		case GPUDetect::PresetLevel::Low:           printf( "Default Fidelity Preset Level: Low\n" ); break;
-		case GPUDetect::PresetLevel::Medium:        printf( "Default Fidelity Preset Level: Medium\n" ); break;
-		case GPUDetect::PresetLevel::MediumPlus:    printf( "Default Fidelity Preset Level: Medium+\n" ); break;
-		case GPUDetect::PresetLevel::High:          printf( "Default Fidelity Preset Level: High\n" ); break;
-		case GPUDetect::PresetLevel::Undefined:     printf( "Default Fidelity Preset Level: Undefined\n" ); break;
-		}
-
-		//
-		// Check if Intel DirectX extensions are available on this system.
-		//
-		if( gpuData.vendorID == GPUDetect::INTEL_VENDOR_ID && gpuData.intelExtensionAvailability )
-		{
-			printf( "Supports Intel Iris Graphics extensions:\n" );
-			printf( "\tpixel synchronization\n" );
-			printf( "\tinstant access of graphics memory\n" );
-		}
-		else if( gpuData.vendorID == GPUDetect::INTEL_VENDOR_ID )
-		{
-			printf( "Does not support Intel Iris Graphics extensions\n" );
-		}
-
-		//
-		// In DirectX, Intel exposes additional information through the driver that can be obtained
-		// querying a special DX counter
-		//
-
-		// Populate the GPU architecture data with info from the counter, otherwise gpuDetect will use the value we got from the Dx11 extension
-		initReturnCode = GPUDetect::InitCounterInfo( &gpuData, device );
-		if( initReturnCode != EXIT_SUCCESS )
-		{
-			printError( initReturnCode );
-		}
-		else
-		{
-			char generationString[256] = "Not set.";
-			GPUDetect::GetIntelGraphicsGenerationAsCString( GPUDetect::GetIntelGraphicsGeneration( gpuData.architectureCounter ), generationString, _countof( generationString ));
-			printf("Using %s graphics\n", generationString);
-
-			const GPUDetect::INTEL_GPU_ARCHITECTURE arch = GPUDetect::GetIntelGPUArchitecture( gpuData.deviceID );
-			printf( "Architecture (from device id): %s (0x%x)\n", GPUDetect::GetIntelGPUArchitectureString( arch ), arch );
-
+# if 0
 			//
-			// Older versions of the IntelDeviceInfo query only return
-			// GPUMaxFreq and GPUMinFreq, all other members will be zero.
+			// This sample includes a .cfg file that maps known vendor and device IDs
+			// to example quality presets.  This looks up the preset for the IDs
+			// queried above.
 			//
-			if( gpuData.advancedCounterDataAvailability )
+			const GPUDetect::PresetLevel defPresets = GPUDetect::GetDefaultFidelityPreset( &gpuData );
+			switch( defPresets )
 			{
-				printf( "Architecture (from device info): %s (0x%x)\n", GPUDetect::GetIntelGPUArchitectureString( gpuData.architectureCounter ), gpuData.architectureCounter );
-				printf( "EU Count:          %u\n", gpuData.euCount );
-				printf( "Package TDP:       %u W\n", gpuData.packageTDP );
-				printf( "Max Fill Rate:     %u pixels/clock\n", gpuData.maxFillRate );
+				case GPUDetect::PresetLevel::NotCompatible: fprintf( stdout, "Default Fidelity Preset Level: NotCompatible\n" ); break;
+				case GPUDetect::PresetLevel::Low:           fprintf( stdout, "Default Fidelity Preset Level: Low\n" );           break;
+				case GPUDetect::PresetLevel::Medium:        fprintf( stdout, "Default Fidelity Preset Level: Medium\n" );        break;
+				case GPUDetect::PresetLevel::MediumPlus:    fprintf( stdout, "Default Fidelity Preset Level: Medium+\n" );       break;
+				case GPUDetect::PresetLevel::High:          fprintf( stdout, "Default Fidelity Preset Level: High\n" );          break;
+				case GPUDetect::PresetLevel::Undefined:     fprintf( stdout, "Default Fidelity Preset Level: Undefined\n" );     break;
 			}
 
-			printf( "GPU Max Frequency: %u MHz\n", gpuData.maxFrequency );
-			printf( "GPU Min Frequency: %u MHz\n", gpuData.minFrequency );
-		}
+			fprintf( stdout, "\n" );
+#endif
 
-		printf( "\n" );
+
+			//
+			// Check if Intel DirectX extensions are available on this system.
+			//
+			if( gpuData.intelExtensionAvailability )
+			{
+				fprintf( stdout, "Supports Intel Iris Graphics extensions:\n" );
+				fprintf( stdout, "\tpixel synchronization\n" );
+				fprintf( stdout, "\tinstant access of graphics memory\n" );
+			}
+			else
+			{
+				fprintf( stdout, "Does not support Intel Iris Graphics extensions\n" );
+			}
+
+			fprintf( stdout, "\n" );
+
+
+			//
+			// In DirectX, Intel exposes additional information through the driver that can be obtained
+			// querying a special DX counter
+			//
+
+			// Populate the GPU architecture data with info from the counter, otherwise gpuDetect will use the value we got from the Dx11 extension
+			initReturnCode = GPUDetect::InitCounterInfo( &gpuData, device );
+			if( initReturnCode != EXIT_SUCCESS )
+			{
+				printError( initReturnCode );
+			}
+			else
+			{
+				fprintf( stdout, "Architecture (from DeviceID): %s\n", GPUDetect::GetIntelGPUArchitectureString( gpuData.architecture ));
+				fprintf( stdout, "using %s graphics\n", GPUDetect::GetIntelGraphicsGenerationString( GPUDetect::GetIntelGraphicsGeneration( gpuData.architecture )) );
+
+				//
+				// Older versions of the IntelDeviceInfo query only return
+				// GPUMaxFreq and GPUMinFreq, all other members will be zero.
+				//
+				if( gpuData.advancedCounterDataAvailability )
+				{
+					fprintf( stdout, "EU Count:          %u\n", gpuData.euCount );
+					fprintf( stdout, "Package TDP:       %u W\n", gpuData.packageTDP );
+					fprintf( stdout, "Max Fill Rate:     %u pixels/clock\n", gpuData.maxFillRate );
+				}
+
+				fprintf( stdout, "GPU Max Frequency: %u MHz\n", gpuData.maxFrequency );
+				fprintf( stdout, "GPU Min Frequency: %u MHz\n", gpuData.minFrequency );
+			}
+
+			fprintf( stdout, "\n" );
+		}
 	}
 
 	device->Release();
 	adapter->Release();
 
-	printf( "\n" );
+	fprintf( stdout, "\n" );
 
 	return 0;
 }
