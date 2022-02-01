@@ -98,10 +98,10 @@ namespace GPUDetect
 
 		if( idhi == 0x3100 )
 		{
-			return IGFX_GEMINILAKE;;
+			return IGFX_GEMINILAKE;
 		}
 
-		if( idhi == 0x5A00 || idhi == 0x0A00 )
+		if( idhi == 0x5A00 )
 		{
 			return IGFX_CANNONLAKE;
 		}
