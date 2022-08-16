@@ -90,6 +90,7 @@ namespace GPUDetect
 		INTEL_GFX_GEN10,
 		INTEL_GFX_GEN11,
 		INTEL_GFX_GEN12,
+		INTEL_DGFX_ACM
 	};
 
 	struct GPUData

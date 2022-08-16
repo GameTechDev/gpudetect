@@ -50,6 +50,10 @@ namespace GPUDetect
 
 		case IGFX_DG1:           return "DG1";
 
+		case IGFX_ADL:			 return "Alderlake";
+
+		case DGFX_ACM:			return "Alchemist";
+
 		// Architectures with no unique enum value, but that still can be determined from DeviceID
 		case IGFX_WHISKEYLAKE:   return "Whiskeylake";
 		case IGFX_COMETLAKE:	 return "Cometlake";
@@ -138,6 +142,16 @@ namespace GPUDetect
 		if (idhi == 0x9B00)
 		{
 			return IGFX_COMETLAKE;
+		}
+
+		if (idhi == 0x4600)
+		{
+			return IGFX_ADL;
+		}
+
+		if (idhi == 0x5600)
+		{
+			return DGFX_ACM;
 		}
 
 		assert(false);

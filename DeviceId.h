@@ -45,8 +45,13 @@ namespace GPUDetect
 		IGFX_LAKEFIELD = 0x1e,
 
 		IGFX_TIGERLAKE_LP = 0x21,
-		
-		IGFX_ROCKETLAKE = 0x23, 
+
+		IGFX_ROCKETLAKE = 0x23,
+
+		IGFX_ADL = 0x25,
+
+		// discrete cards aka dg2 128 aka alchemist a370
+		DGFX_ACM = 1270,
 
 		IGFX_DG1 = 0x4ba,
 
@@ -54,7 +59,8 @@ namespace GPUDetect
 
 		// Architectures with no enum value
 		IGFX_WHISKEYLAKE,
-		IGFX_COMETLAKE
+		IGFX_COMETLAKE,
+
 	};
 
 	/*******************************************************************************

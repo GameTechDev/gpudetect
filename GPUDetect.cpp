@@ -599,8 +599,11 @@ GPUDetect::IntelGraphicsGeneration GetIntelGraphicsGeneration( INTEL_GPU_ARCHITE
 		case IGFX_TIGERLAKE_LP:
 		case IGFX_DG1:
 		case IGFX_ROCKETLAKE:
+		case IGFX_ADL: 
 			return INTEL_GFX_GEN12;
 
+		case DGFX_ACM:
+			return INTEL_DGFX_ACM;
 
 		default:
 			return INTEL_GFX_GEN_UNKNOWN;
@@ -620,6 +623,7 @@ const char * GetIntelGraphicsGenerationString( const IntelGraphicsGeneration gen
 		case INTEL_GFX_GEN10:  return "Gen10";
 		case INTEL_GFX_GEN11:  return "Gen11";
 		case INTEL_GFX_GEN12:  return "Gen12 / Xe";
+		case INTEL_DGFX_ACM:   return "Xe High Performance Graphics";
 
 		case INTEL_GFX_GEN_UNKNOWN:
 		default:               return "Unkown";
