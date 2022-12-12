@@ -48,9 +48,10 @@ namespace GPUDetect
 
 		IGFX_ROCKETLAKE = 0x23,
 
-		IGFX_ADL = 0x25,
+		IGFX_ADL = 0x24,
+		IGFX_ADL_LP = 0X25,
 
-		// discrete cards aka dg2 128 aka alchemist a370
+		// Alchemist 
 		DGFX_ACM = 1270,
 
 		IGFX_DG1 = 0x4ba,
@@ -74,7 +75,7 @@ namespace GPUDetect
 	 *      example, a newer architecture may have an lower deviceID.
 	 *
 	 ******************************************************************************/
-	INTEL_GPU_ARCHITECTURE GetIntelGPUArchitecture( unsigned int deviceId );
+	INTEL_GPU_ARCHITECTURE GetIntelGPUArchitecture(unsigned int deviceId);
 
 	/*******************************************************************************
 	 * getIntelGPUArchitectureString
@@ -82,5 +83,5 @@ namespace GPUDetect
 	 *     Convert A INTEL_GPU_ARCHITECTURE to a string.
 	 *
 	 ******************************************************************************/
-	char const* GetIntelGPUArchitectureString( INTEL_GPU_ARCHITECTURE arch );
+	char const* GetIntelGPUArchitectureString(INTEL_GPU_ARCHITECTURE arch);
 }
