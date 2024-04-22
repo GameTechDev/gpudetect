@@ -37,3 +37,5 @@ This project requires the latest Windows SDK.
 *	[Intel(tm) Developer Zone Games & Graphics Forum](https://software.intel.com/en-us/forums/developing-games-and-graphics-on-intel) - Forum for answers on software issues.
 *	[Intel(tm) GameDev Developer Zone](https://software.intel.com/en-us/gamedev) - Articles and samples related to developing games
 *	[Intel(tm) Graphics Performance Analyzer](https://software.intel.com/en-us/gpa) -Must have tool for any graphics developer.
+
+
