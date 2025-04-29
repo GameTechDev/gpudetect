@@ -56,6 +56,8 @@ namespace GPUDetect
 
 		IGFX_DG1 = 0x4ba,
 
+		IGFX_RAPTORLAKE = 0x4bb,
+
 		IGFX_MAX_PRODUCT,
 
 		// Architectures with no enum value
